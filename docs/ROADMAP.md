@@ -58,3 +58,10 @@
 - [x] Selection by rectangle or lasso on imported image, saved as transparent layer.
 - [x] Explicit approval before import, including preview of Split Sheet output.
 - [ ] Validate on Android through GitHub Actions and device testing.
+
+## v0.2.1 — Smart Crop corrections
+- [x] Correct white-pixel alpha handling at maximum sensitivity.
+- [x] Use a checkerboard to show actual transparency in the preview.
+- [x] Add direct selection shortcut for screenshot imports.
+- [ ] Verify on physical Android device after successful build.
+- Complex screenshots still require rectangle/lasso selection around desired artwork; no AI segmentation yet.
