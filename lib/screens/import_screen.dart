@@ -352,12 +352,15 @@ class _ImportScreenState extends State<ImportScreen> {
                 ],
                 const Spacer(),
                 FilledButton.icon(
-                  onPressed: _working || _result.isEmpty ||
+                  onPressed: _working || _result.isEmpty || _chosenPieces.isEmpty ||
                           (selecting && !_showResult)
                       ? null
-                      : () => Navigator.pop(context, _result),
+                      : () => Navigator.pop(context, [
+                          for (var i = 0; i < _result.length; i++)
+                            if (_chosenPieces.contains(i)) _result[i],
+                        ]),
                   icon: const Icon(Icons.add),
-                  label: Text('Add ${_result.length} layer${_result.length == 1 ? '' : 's'}'),
+                  label: Text('Add ${_chosenPieces.length} layer${_chosenPieces.length == 1 ? '' : 's'}'),
                 ),
               ]),
             ),
