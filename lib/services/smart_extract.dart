@@ -112,8 +112,8 @@ List<ExtractedArtwork> _processInIsolate(_ExtractionInput request) {
       var alpha = a;
       if (removeWhite) {
         // Clear bright white pixels while preserving dark ink.
-        final lightest = math.max(r, math.max(g, b));
-        final opacity = ((request.whiteThreshold + 10 - lightest) / 18)
+        final darkest = math.min(r, math.min(g, b));
+        final opacity = ((request.whiteThreshold - darkest) / 16)
             .clamp(0.0, 1.0);
         alpha = (a * opacity).round();
       }
