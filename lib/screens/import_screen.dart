@@ -26,6 +26,8 @@ class _ImportScreenState extends State<ImportScreen> {
   bool _working = false;
   bool _showResult = true;
   bool _removeWhite = true;
+  bool _detectSelection = false;
+  Set<int> _chosenPieces = {};
   int _threshold = 242;
   int _imageWidth = 1;
   int _imageHeight = 1;
@@ -87,7 +89,7 @@ class _ImportScreenState extends State<ImportScreen> {
     try {
       final pieces = await SmartExtract.process(
         bytes,
-        splitSheet: _kind == ImportKind.split,
+        splitSheet: _kind == ImportKind.split || (_detectSelection && _selection != null),
         keepBackground: _kind == ImportKind.unchanged || !_removeWhite,
         forceWhiteRemoval: _removeWhite && _kind != ImportKind.unchanged,
         whiteThreshold: _threshold,
@@ -96,6 +98,7 @@ class _ImportScreenState extends State<ImportScreen> {
       if (!mounted || token != _requestId) return;
       setState(() {
         _result = pieces;
+        _chosenPieces = {for (var i = 0; i < pieces.length; i++) i};
         _working = false;
       });
     } catch (e) {
@@ -119,6 +122,8 @@ class _ImportScreenState extends State<ImportScreen> {
       _start = null;
       _end = null;
       _lasso = [];
+      _detectSelection = false;
+      _chosenPieces = {};
       _showResult = next != ImportKind.rectangle && next != ImportKind.lasso;
       _result = [];
     });
