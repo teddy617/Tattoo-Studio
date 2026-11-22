@@ -65,3 +65,10 @@
 - [x] Add direct selection shortcut for screenshot imports.
 - [ ] Verify on physical Android device after successful build.
 - Complex screenshots still require rectangle/lasso selection around desired artwork; no AI segmentation yet.
+
+## v0.3.0 — select and detect multiple artwork pieces
+- [x] After drawing a rectangle/lasso around artwork, optionally detect separate regions inside it.
+- [x] Preview detected pieces and select exactly which ones to add as layers.
+- [x] Add a test excluding a screenshot header from the manually selected region.
+- [ ] Validate the GitHub Actions build and actual Android output.
+- No semantic AI segmentation: close/touching motifs may still merge; intricate backgrounds may need manual selection.
