@@ -299,8 +299,31 @@ class _ImportScreenState extends State<ImportScreen> {
                       }),
               ),
             ),
-            if (_kind == ImportKind.split && _result.length > 1)
-              Text('${_result.length} designs detected (first shown)'),
+            if (_result.length > 1 && _showResult)
+              SizedBox(
+                height: 94,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _result.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 6),
+                  itemBuilder: (context, index) => FilterChip(
+                    selected: _chosenPieces.contains(index),
+                    onSelected: (selected) => setState(() {
+                      if (selected) {
+                        _chosenPieces.add(index);
+                      } else {
+                        _chosenPieces.remove(index);
+                      }
+                    }),
+                    label: SizedBox(
+                      width: 64,
+                      height: 58,
+                      child: Image.memory(_result[index].pngBytes,
+                          fit: BoxFit.contain),
+                    ),
+                  ),
+                ),
+              ),
             if (_working) const LinearProgressIndicator(),
             Padding(
               padding: const EdgeInsets.all(12),
