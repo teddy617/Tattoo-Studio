@@ -52,3 +52,9 @@
 - A flat PNG export is not a stencil guarantee; an artist should check actual
   line thickness, contrast and placement before tattooing.
 - The app saves only to local app storage. Removing the app can delete projects.
+
+## v0.2.0 — import and extraction
+- [x] Before/after preview and sensitivity control for Smart Crop.
+- [x] Selection by rectangle or lasso on imported image, saved as transparent layer.
+- [x] Explicit approval before import, including preview of Split Sheet output.
+- [ ] Validate on Android through GitHub Actions and device testing.

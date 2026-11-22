@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 import '../models/design_project.dart';
 import '../services/project_repository.dart';
 import '../services/smart_extract.dart';
+import 'import_screen.dart';
 
 enum _ImportMode { smartCrop, splitSheet, unchanged }
 
@@ -116,34 +117,38 @@ class _EditorScreenState extends State<EditorScreen> {
   Future<void> _import(_ImportMode mode) async {
     if (_busy) return;
     try {
-      List<XFile> picks;
+      final picks = <XFile>[];
       if (mode == _ImportMode.splitSheet) {
-        final picked = await _picker.pickImage(source: ImageSource.gallery);
-        picks = picked == null ? [] : [picked];
+        final file = await _picker.pickImage(source: ImageSource.gallery);
+        if (file != null) picks.add(file);
       } else {
-        picks = await _picker.pickMultiImage();
+        picks.addAll(await _picker.pickMultiImage());
       }
       if (picks.isEmpty || !mounted) return;
-      setState(() => _busy = true);
-      _checkpoint();
       var added = 0;
       for (final file in picks.take(12)) {
-        final extracted = await SmartExtract.process(
-          await file.readAsBytes(),
-          splitSheet: mode == _ImportMode.splitSheet,
-          keepBackground: mode == _ImportMode.unchanged,
+        if (!mounted) break;
+        final extracted = await Navigator.of(context).push<List<ExtractedArtwork>>(
+          MaterialPageRoute(
+            builder: (_) => ImportScreen(
+              source: file,
+              initialMode: mode == _ImportMode.splitSheet
+                  ? ImportKind.split
+                  : mode == _ImportMode.unchanged
+                      ? ImportKind.unchanged
+                      : ImportKind.smart,
+            ),
+          ),
         );
+        if (extracted == null || extracted.isEmpty || !mounted) continue;
+        setState(() => _busy = true);
+        _checkpoint();
         for (final artwork in extracted) {
           final id = makeId();
           final path = await _repository.writeLayerAsset(
-            _project.id,
-            id,
-            artwork.pngBytes,
+            _project.id, id, artwork.pngBytes,
           );
-          final fit = math.min(
-            620 / artwork.width,
-            820 / artwork.height,
-          );
+          final fit = math.min(620 / artwork.width, 820 / artwork.height);
           final width = artwork.width * fit;
           final height = artwork.height * fit;
           final shift = (added % 7) * 18.0;
@@ -166,9 +171,12 @@ class _EditorScreenState extends State<EditorScreen> {
           });
           added++;
         }
+        _persist();
+        if (mounted) setState(() => _busy = false);
       }
-      _persist();
-      if (mounted) _toast('Added $added editable layer${added == 1 ? '' : 's'}');
+      if (mounted && added > 0) {
+        _toast('Added $added editable layer${added == 1 ? '' : 's'}');
+      }
     } catch (error) {
       if (mounted) _toast('Import failed: $error');
     } finally {

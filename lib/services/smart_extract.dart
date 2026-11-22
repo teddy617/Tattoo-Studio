@@ -17,12 +17,28 @@ class ExtractedArtwork {
   final int height;
 }
 
+class NormalizedPoint {
+  const NormalizedPoint(this.x, this.y);
+  final double x;
+  final double y;
+}
+
+class ExtractionSelection {
+  const ExtractionSelection({required this.points, this.rectangle = false});
+  final List<NormalizedPoint> points;
+  final bool rectangle;
+}
+
 class _ExtractionInput {
-  const _ExtractionInput(this.source, this.splitSheet, this.keepBackground);
+  const _ExtractionInput(this.source, this.splitSheet, this.keepBackground,
+      this.whiteThreshold, this.forceWhiteRemoval, this.selection);
 
   final Uint8List source;
   final bool splitSheet;
   final bool keepBackground;
+  final int whiteThreshold;
+  final bool forceWhiteRemoval;
+  final ExtractionSelection? selection;
 }
 
 /// Works offline; best suited to black/colored artwork on plain white or
@@ -32,16 +48,22 @@ class SmartExtract {
     Uint8List source, {
     bool splitSheet = false,
     bool keepBackground = false,
-  }) =>
-      compute(_processInIsolate, _ExtractionInput(source, splitSheet, keepBackground));
+    int whiteThreshold = 242,
+    bool forceWhiteRemoval = false,
+    ExtractionSelection? selection,
+  }) => compute(_processInIsolate, _ExtractionInput(source, splitSheet,
+      keepBackground, whiteThreshold, forceWhiteRemoval, selection));
 
   /// Also exposed synchronously for repeatable unit tests.
   static List<ExtractedArtwork> processSync(
     Uint8List source, {
     bool splitSheet = false,
     bool keepBackground = false,
-  }) =>
-      _processInIsolate(_ExtractionInput(source, splitSheet, keepBackground));
+    int whiteThreshold = 242,
+    bool forceWhiteRemoval = false,
+    ExtractionSelection? selection,
+  }) => _processInIsolate(_ExtractionInput(source, splitSheet,
+      keepBackground, whiteThreshold, forceWhiteRemoval, selection));
 }
 
 List<ExtractedArtwork> _processInIsolate(_ExtractionInput request) {
@@ -60,7 +82,20 @@ List<ExtractedArtwork> _processInIsolate(_ExtractionInput request) {
     }
   }
 
-  final removeWhite = !request.keepBackground && _whiteBorder(source);
+  final removeWhite = !request.keepBackground &&
+      (request.forceWhiteRemoval || _whiteBorder(source));
+  final selection = request.selection;
+  final polygon = selection?.points
+      .map((point) => NormalizedPoint(
+          point.x.clamp(0.0, 1.0) * source.width,
+          point.y.clamp(0.0, 1.0) * source.height))
+      .toList();
+  final xs = polygon?.map((p) => p.x).toList() ?? [];
+  final ys = polygon?.map((p) => p.y).toList() ?? [];
+  final minX = xs.isEmpty ? 0.0 : xs.reduce(math.min);
+  final maxX = xs.isEmpty ? source.width.toDouble() : xs.reduce(math.max);
+  final minY = ys.isEmpty ? 0.0 : ys.reduce(math.min);
+  final maxY = ys.isEmpty ? source.height.toDouble() : ys.reduce(math.max);
   final transparent = img.Image(
     width: source.width,
     height: source.height,
@@ -76,10 +111,20 @@ List<ExtractedArtwork> _processInIsolate(_ExtractionInput request) {
       final a = px.a.toInt();
       var alpha = a;
       if (removeWhite) {
-        final darkest = math.min(r, math.min(g, b));
-        // White becomes clear; light paper edges get anti-aliased opacity.
-        final backgroundOpacity = ((247 - darkest) / 18).clamp(0.0, 1.0);
-        alpha = (a * backgroundOpacity).round();
+        // Clear bright white pixels while preserving dark ink.
+        final lightest = math.max(r, math.max(g, b));
+        final opacity = ((request.whiteThreshold + 10 - lightest) / 18)
+            .clamp(0.0, 1.0);
+        alpha = (a * opacity).round();
+      }
+      if (polygon != null && polygon.length >= 2) {
+        final px = x + 0.5;
+        final py = y + 0.5;
+        final insideBounds = px >= minX && px <= maxX &&
+            py >= minY && py <= maxY;
+        final insideSelection = insideBounds &&
+            (selection!.rectangle || _insidePolygon(px, py, polygon));
+        if (!insideSelection) alpha = 0;
       }
       transparent.setPixelRgba(x, y, r, g, b, alpha);
     }
@@ -271,4 +316,18 @@ List<_PixelRectangle> _findSeparatedDesigns(img.Image source) {
     return row == 0 ? a.x.compareTo(b.x) : row;
   });
   return filtered;
+}
+
+/// Even/odd ray casting; polygon vertices are in image pixel coordinates.
+bool _insidePolygon(double x, double y, List<NormalizedPoint> vertices) {
+  var inside = false;
+  for (var i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
+    final a = vertices[i];
+    final b = vertices[j];
+    if ((a.y > y) != (b.y > y) &&
+        x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) {
+      inside = !inside;
+    }
+  }
+  return inside;
 }
