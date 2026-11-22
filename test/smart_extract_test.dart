@@ -28,6 +28,16 @@ void main() {
     expect(decoded.getPixel(0, 0).a, 0);
   });
 
+  test('white pixels become transparent at maximum sensitivity', () {
+    final output = SmartExtract.processSync(
+      sheetWithTwoDesigns(),
+      forceWhiteRemoval: true,
+      whiteThreshold: 252,
+    );
+    final decoded = img.decodePng(output.first.pngBytes)!;
+    expect(decoded.getPixel(decoded.width ~/ 2, 0).a, 0);
+  });
+
   test('split sheet finds two separated designs', () {
     final pieces = SmartExtract.processSync(
       sheetWithTwoDesigns(),
