@@ -220,6 +220,18 @@ class _ImportScreenState extends State<ImportScreen> {
                   textAlign: TextAlign.center,
                 ),
               ),
+            if (selecting && selectionReady)
+              SwitchListTile(
+                dense: true,
+                title: const Text('Detect multiple designs within selection'),
+                value: _detectSelection,
+                onChanged: _working ? null : (value) => setState(() {
+                  _detectSelection = value;
+                  _result = [];
+                  _chosenPieces = {};
+                  _showResult = false;
+                }),
+              ),
             if (!selecting)
               SegmentedButton<bool>(
                 segments: const [
