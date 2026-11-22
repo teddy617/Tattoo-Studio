@@ -113,6 +113,7 @@ class _ImportScreenState extends State<ImportScreen> {
 
   void _newMode(ImportKind? next) {
     if (next == null) return;
+    ++_requestId;
     setState(() {
       _kind = next;
       _start = null;
@@ -185,6 +186,25 @@ class _ImportScreenState extends State<ImportScreen> {
                 ]),
               ),
             ],
+            if (_kind == ImportKind.smart)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Screenshot? Select only the artwork before removing its background.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _working ? null :
+                          () => _newMode(ImportKind.rectangle),
+                      child: const Text('Select area'),
+                    ),
+                  ],
+                ),
+              ),
             if (selecting)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
@@ -220,8 +240,8 @@ class _ImportScreenState extends State<ImportScreen> {
                           width: width,
                           height: height,
                           child: Stack(fit: StackFit.expand, children: [
-                            Container(color: const Color(0xFFE1E1E1)),
-                            if (selecting && !_showResult || !_showResult || preview == null)
+                            CustomPaint(painter: _CheckerboardPainter()),
+                            if (!_showResult || preview == null)
                               Image.memory(original, fit: BoxFit.fill)
                             else
                               Image.memory(preview, fit: BoxFit.contain),
@@ -343,4 +363,24 @@ class _SelectionPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SelectionPainter oldDelegate) => true;
+}
+
+class _CheckerboardPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    const cell = 14.0;
+    canvas.drawRect(Offset.zero & size,
+        Paint()..color = const Color(0xFFFFFFFF));
+    final shaded = Paint()..color = const Color(0xFFD5D9DE);
+    for (var row = 0; row < (size.height / cell).ceil(); row++) {
+      for (var column = row % 2;
+          column < (size.width / cell).ceil(); column += 2) {
+        canvas.drawRect(
+            Rect.fromLTWH(column * cell, row * cell, cell, cell), shaded);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _CheckerboardPainter oldDelegate) => false;
 }
