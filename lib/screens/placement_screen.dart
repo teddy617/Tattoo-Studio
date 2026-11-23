@@ -20,6 +20,8 @@ class _PlacementScreenState extends State<PlacementScreen> {
   double _opacity = 0.9;
   double _size = 0.65;
   double _rotation = 0;
+  double _depth = 0.6;
+  bool _placeMode = false;
   String? _error;
 
   @override
@@ -37,7 +39,8 @@ class _PlacementScreenState extends State<PlacementScreen> {
               _ready = true;
               _error = null;
             });
-          } else {
+            _sendArtwork();
+          } else if (message.message != 'placed') {
             setState(() => _error = message.message);
           }
         },
@@ -73,6 +76,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
       'opacity': _opacity,
       'scale': _size,
       'rotation': _rotation,
+      'depth': _depth,
     });
     await _controller.runJavaScript('setPlacement(' + jsonEncode(data) + ')');
   }
@@ -103,6 +107,20 @@ class _PlacementScreenState extends State<PlacementScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: Column(children: [
               Row(children: [
+                Expanded(child: SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(value: false, label: Text('Orbit')),
+                    ButtonSegment(value: true, label: Text('Place')),
+                  ],
+                  selected: {_placeMode},
+                  onSelectionChanged: (values) {
+                    setState(() => _placeMode = values.first);
+                    _controller.runJavaScript('setMode(' +
+                        jsonEncode(_placeMode ? 'place' : 'orbit') + ')');
+                  },
+                )),
+              ]),
+              Row(children: [
                 Expanded(
                   child: FilledButton.tonalIcon(
                     onPressed: _ready ? _sendArtwork : null,
@@ -117,8 +135,10 @@ class _PlacementScreenState extends State<PlacementScreen> {
                       _size = .65;
                       _rotation = 0;
                       _opacity = .9;
+                      _depth = .6;
                     });
                     _syncPlacement();
+                    _controller.runJavaScript('resetPlacement()');
                   },
                   child: const Text('Reset'),
                 ),
@@ -126,9 +146,10 @@ class _PlacementScreenState extends State<PlacementScreen> {
               _slider('Size', _size, .15, 1.5, (v) => _size = v),
               _slider('Rotation', _rotation, -180, 180, (v) => _rotation = v),
               _slider('Opacity', _opacity, 0, 1, (v) => _opacity = v),
+              _slider('Wrap depth', _depth, .15, 1.2, (v) => _depth = v),
               const Text(
-                'Proof of concept: curved generic forearm, not your anatomy. '
-                'Placement is not saved yet. Rotate by dragging.',
+                'Prototype mannequin, not your anatomy. Orbit to rotate or '
+                'Place to tap the limb. Placement saving follows.',
                 style: TextStyle(fontSize: 11),
                 textAlign: TextAlign.center,
               ),
