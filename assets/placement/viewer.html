@@ -1,15 +1,242 @@
 <!doctype html>
-<html lang="en">
-<head>
+<html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <style>
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#202127}
 canvas{display:block;width:100%;height:100%;touch-action:none}
-#status{position:absolute;bottom:10px;left:10px;right:10px;text-align:center;color:#eee;font:12px sans-serif;pointer-events:none}
-</style>
-<script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
-</head>
-<body><div id="status">Orbit to turn • Place to position</div>
-<script type="module" src="./viewer.js"></script></body>
-</html>
+#status{position:absolute;bottom:8px;left:8px;right:8px;color:#ddd;font:12px sans-serif;text-align:center;pointer-events:none}
+</style></head><body>
+<canvas id="view"></canvas><div id="status">Starting 3D viewer…</div>
+<script>
+'use strict';
+// Standalone offline WebGL renderer: no ES modules, CORS, CDN or file:// subresources.
+// Tattoo alpha is sampled on the actual cylindrical mesh, not as a screen overlay.
+(function () {
+  const canvas=document.getElementById('view');
+  const status=document.getElementById('status');
+  const bridge=(value)=>{if(window.PlacementBridge)window.PlacementBridge.postMessage(value);};
+  const report=(value)=>{status.textContent=value;bridge(value);};
+  window.addEventListener('error', e=>report('Viewer error: '+e.message));
+  const gl=canvas.getContext('webgl',{antialias:true,alpha:false});
+  if(!gl){report('WebGL unavailable on this device');return;}
+  const vs=[
+    'attribute vec3 position;attribute vec3 normal;attribute vec2 uv;',
+    'uniform float yaw,pitch,distance,ratio;',
+    'varying vec3 surfaceNormal;varying vec2 surfaceUV;',
+    'void main(){',
+    'float cy=cos(yaw),sy=sin(yaw),cx=cos(pitch),sx=sin(pitch);',
+    'vec3 p=vec3(cy*position.x+sy*position.z,position.y,-sy*position.x+cy*position.z);',
+    'vec3 n=vec3(cy*normal.x+sy*normal.z,normal.y,-sy*normal.x+cy*normal.z);',
+    'p=vec3(p.x,cx*p.y-sx*p.z,sx*p.y+cx*p.z);',
+    'n=normalize(vec3(n.x,cx*n.y-sx*n.z,sx*n.y+cx*n.z));',
+    'float depth=distance-p.z;',
+    'gl_Position=vec4(2.55*p.x/(ratio*depth),2.55*p.y/depth,(depth-2.0)/8.0,1.0);',
+    'surfaceNormal=n;surfaceUV=uv;',
+    '}'
+  ].join('\n');
+  const fs=[
+    'precision mediump float;',
+    'varying vec3 surfaceNormal;varying vec2 surfaceUV;',
+    'uniform sampler2D ink;',
+    'uniform float hasInk,alpha,size,angle,wrapWidth,centerU,centerV,aspect;',
+    'void main(){',
+    'vec3 skin=vec3(0.72,0.51,0.43);',
+    'float light=0.68+0.32*max(0.0,dot(normalize(surfaceNormal),normalize(vec3(.35,.6,1.0))));',
+    'float du=fract(surfaceUV.x-centerU+.5)-.5;',
+    'float dv=surfaceUV.y-centerV;',
+    'float width=max(.01,size*wrapWidth);',
+    'float height=max(.01,size*.46*aspect);',
+    'vec2 local=vec2(du/width,dv/height);',
+    'float c=cos(angle),s=sin(angle);',
+    'local=vec2(c*local.x-s*local.y,s*local.x+c*local.y)+.5;',
+    'vec4 tattoo=vec4(0.0);',
+    'if(hasInk>.5&&local.x>=0.0&&local.x<=1.0&&local.y>=0.0&&local.y<=1.0)',
+    ' tattoo=texture2D(ink,local);',
+    'vec3 color=mix(skin,tattoo.rgb,tattoo.a*alpha);',
+    'gl_FragColor=vec4(color*light,1.0);',
+    '}'
+  ].join('\n');
+  function shader(type,src){
+    const id=gl.createShader(type);gl.shaderSource(id,src);gl.compileShader(id);
+    if(!gl.getShaderParameter(id,gl.COMPILE_STATUS))
+      throw Error(gl.getShaderInfoLog(id));
+    return id;
+  }
+  let program;
+  try{
+    program=gl.createProgram();
+    gl.attachShader(program,shader(gl.VERTEX_SHADER,vs));
+    gl.attachShader(program,shader(gl.FRAGMENT_SHADER,fs));
+    gl.linkProgram(program);
+    if(!gl.getProgramParameter(program,gl.LINK_STATUS))
+      throw Error(gl.getProgramInfoLog(program));
+  }catch(e){report('3D shader error: '+e.message);return;}
+  gl.useProgram(program);
+  const vertices=[],indices=[],rings=56,sides=96;
+  for(let row=0;row<=rings;row++){
+    const v=row/rings,y=(v-.5)*2.6,r=.47+.13*v;
+    for(let col=0;col<=sides;col++){
+      const u=col/sides,a=u*Math.PI*2;
+      const nx=Math.sin(a),nz=Math.cos(a);
+      vertices.push(r*nx,y,r*nz,nx,0,nz,u,v);
+    }
+  }
+  for(let row=0;row<rings;row++)for(let col=0;col<sides;col++){
+    const i=row*(sides+1)+col;
+    indices.push(i,i+sides+1,i+1,i+1,i+sides+1,i+sides+2);
+  }
+  const buffer=gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(vertices),gl.STATIC_DRAW);
+  const elements=gl.createBuffer();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,elements);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(indices),gl.STATIC_DRAW);
+  [['position',0,3],['normal',3,3],['uv',6,2]].forEach(([name,offset,arity])=>{
+    const location=gl.getAttribLocation(program,name);
+    if(location<0)return;
+    gl.enableVertexAttribArray(location);
+    gl.vertexAttribPointer(location,arity,gl.FLOAT,false,32,offset*4);
+  });
+  const texture=gl.createTexture();
+  gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,texture);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([255,255,255,0]));
+  gl.uniform1i(gl.getUniformLocation(program,'ink'),0);
+  gl.enable(gl.DEPTH_TEST);
+  gl.disable(gl.CULL_FACE);
+  let yaw=.3,pitch=.05,distance=4.8,mode='orbit';
+  let size=.65,rotation=0,opacity=.9,wrap=.6,aspect=1,loaded=false;
+  let centerU=0,centerV=.5,down=null,pinchDistance=0;
+  const set=(name,value)=>gl.uniform1f(gl.getUniformLocation(program,name),value);
+  function state(){
+    bridge(JSON.stringify({
+      type:'state',centerU:centerU,centerV:centerV,
+      point:[Math.sin(centerU*Math.PI*2)*.53,(centerV-.5)*2.6,Math.cos(centerU*Math.PI*2)*.53],
+      normal:[Math.sin(centerU*Math.PI*2),0,Math.cos(centerU*Math.PI*2)]
+    }));
+  }
+  window.setTattoo=function(uri){
+    const image=new Image();
+    image.onload=function(){
+      gl.bindTexture(gl.TEXTURE_2D,texture);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+      gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);
+      aspect=image.height/image.width;
+      loaded=true;status.textContent='Tattoo follows the 3D limb surface';
+    };
+    image.onerror=function(){report('Unable to read tattoo image');};
+    image.src=uri;
+  };
+  window.setPlacement=function(raw){
+    const p=typeof raw==='string'?JSON.parse(raw):raw;
+    if(typeof p.opacity==='number')opacity=Math.max(0,Math.min(1,p.opacity));
+    if(typeof p.scale==='number')size=Math.max(.15,Math.min(1.5,p.scale));
+    if(typeof p.rotation==='number')rotation=p.rotation*Math.PI/180;
+    if(typeof p.depth==='number')wrap=Math.max(.15,Math.min(1.2,p.depth));
+  };
+  window.restorePlacement=function(raw){
+    const p=typeof raw==='string'?JSON.parse(raw):raw;
+    window.setPlacement(p);
+    if(typeof p.centerU==='number')centerU=p.centerU;
+    else if(Array.isArray(p.point))centerU=Math.atan2(p.point[0],p.point[2])/(Math.PI*2);
+    if(typeof p.centerV==='number')centerV=p.centerV;
+    else if(Array.isArray(p.point))centerV=p.point[1]/2.6+.5;
+  };
+  window.setMode=function(value){
+    mode=value==='place'?'place':'orbit';
+    status.textContent=mode==='place'?'Tap the forearm to position tattoo':'Drag to turn • Pinch to zoom';
+  };
+  window.resetPlacement=function(){
+    centerU=0;centerV=.5;state();
+  };
+  function project(x,y,z){
+    const cy=Math.cos(yaw),sy=Math.sin(yaw),cx=Math.cos(pitch),sx=Math.sin(pitch);
+    const a=cy*x+sy*z,b=-sy*x+cy*z;
+    const yp=cx*y-sx*b,zp=sx*y+cx*b;
+    const depth=distance-zp,ratio=canvas.width/canvas.height;
+    return {x:(2.55*(a)/(ratio*depth)+1)*canvas.width/2,
+      y:(1-2.55*yp/depth)*canvas.height/2,
+      depth:depth,normalZ:zp};
+  }
+  function pick(clientX,clientY){
+    const box=canvas.getBoundingClientRect();
+    const px=(clientX-box.left)*canvas.width/box.width;
+    const py=(clientY-box.top)*canvas.height/box.height;
+    let closest=Infinity,bestU=null,bestV=null;
+    // Ray-picking approximation: find nearest visible surface vertex in screen space.
+    for(let row=0;row<=rings;row++){
+      const v=row/rings,y=(v-.5)*2.6,r=.47+.13*v;
+      for(let col=0;col<sides;col++){
+        const u=col/sides,a=u*Math.PI*2,x=r*Math.sin(a),z=r*Math.cos(a);
+        const projected=project(x,y,z);
+        const d=(px-projected.x)**2+(py-projected.y)**2;
+        // Prefer the front-facing side of the limb where projections overlap.
+        const depthPenalty=projected.depth>distance?25:0;
+        if(d+depthPenalty<closest){
+          closest=d+depthPenalty;bestU=u;bestV=v;
+        }
+      }
+    }
+    if(closest<canvas.width*canvas.width*.10&&bestU!==null){
+      centerU=bestU;centerV=bestV;state();
+      status.textContent='Placement updated on forearm surface';
+    }
+  }
+  canvas.addEventListener('pointerdown',e=>{
+    down={id:e.pointerId,x:e.clientX,y:e.clientY,moved:false};
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove',e=>{
+    if(!down||down.id!==e.pointerId)return;
+    const dx=e.clientX-down.x,dy=e.clientY-down.y;
+    if(Math.hypot(dx,dy)>3)down.moved=true;
+    if(mode==='orbit'){
+      yaw+=dx*.011;
+      pitch=Math.max(-1.0,Math.min(1.0,pitch+dy*.006));
+    }else pick(e.clientX,e.clientY);
+    down.x=e.clientX;down.y=e.clientY;
+  });
+  canvas.addEventListener('pointerup',e=>{
+    if(mode==='place'&&down&&down.id===e.pointerId&&!down.moved)pick(e.clientX,e.clientY);
+    down=null;
+  });
+  canvas.addEventListener('pointercancel',()=>{down=null;});
+  canvas.addEventListener('wheel',e=>{
+    e.preventDefault();
+    distance=Math.max(2.6,Math.min(8,distance+e.deltaY*.008));
+  },{passive:false});
+  canvas.addEventListener('touchmove',e=>{
+    if(e.touches.length===2){
+      const a=e.touches[0],b=e.touches[1];
+      const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+      if(pinchDistance)distance=Math.max(2.6,Math.min(8,distance+(pinchDistance-d)*.014));
+      pinchDistance=d;
+    }
+  },{passive:true});
+  canvas.addEventListener('touchend',()=>{pinchDistance=0;});
+  canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();report('3D context lost; reopen placement preview');});
+  function frame(){
+    const scale=Math.min(window.devicePixelRatio||1,2);
+    const width=Math.max(1,Math.round(canvas.clientWidth*scale));
+    const height=Math.max(1,Math.round(canvas.clientHeight*scale));
+    if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}
+    gl.viewport(0,0,width,height);
+    gl.clearColor(.12,.13,.16,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+    gl.useProgram(program);
+    set('yaw',yaw);set('pitch',pitch);set('distance',distance);
+    set('ratio',width/height);set('alpha',opacity);
+    set('size',size);set('angle',rotation);
+    set('wrapWidth',.28+wrap*.4);set('centerU',centerU);
+    set('centerV',centerV);set('aspect',Math.min(3,Math.max(.2,aspect)));
+    set('hasInk',loaded?1:0);
+    gl.drawElements(gl.TRIANGLES,indices.length,gl.UNSIGNED_SHORT,0);
+    requestAnimationFrame(frame);
+  }
+  try{frame();report('ready');}
+  catch(e){report('Viewer error: '+e.message);}
+})();
+</script></body></html>
