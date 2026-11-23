@@ -92,3 +92,14 @@
 - [x] Unit tests for center snap geometry.
 - [ ] Verify Android build, multi-touch behavior, and on-device export.
 - Viewport zoom is not saved as part of the project and does not change exported image resolution.
+
+## v0.6.0 — tattoo-specific stencil preparation
+- [x] Add optional grayscale-to-black stencil threshold processing with preview.
+- [x] Adjustable threshold and opt-in removal of isolated speckle pixels.
+- [x] Export stencil PNG against white or transparent background.
+- [x] Export normal composition PNG against white or transparent background.
+- [x] Derived stencil is not a destructive modification to editable project layers.
+- [x] Add image processing unit tests for alpha, ink threshold and noise cleanup.
+- [ ] Verify compilation, workflow success and on-device UI/export.
+- [ ] Physical size and DPI control, transfer-printer calibration and high-fidelity line cleanup remain future work.
+- Stencil preview is for design review only, not a validated ready-to-transfer tattoo stencil.
