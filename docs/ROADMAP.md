@@ -123,9 +123,10 @@
 - [x] Implement surface-conforming tattoo texture mapping on a 3D forearm mesh (requires on-device visual verification).
 - [x] Add Orbit/Place modes, tap-to-anchor, scale, rotation, opacity and projection-depth controls.
 - [x] Add per-project placement autosave/reload independent from design layers.
-- [ ] Compile and validate on a physical Android device, including standalone WebGL initialization, texture upload, gestures and surface texture wrap.
-- [ ] Expand anatomy only after surface-wrapping proof passes.
-- Version remains v0.7 until the v0.8 build and actual 3D placement behavior are verified.
+- [x] User confirmed the standalone forearm WebGL viewer loads on Android and displays a curved tattoo, with placement and controls visible in screenshot (2026-11-23).
+- [ ] Verify 180-degree rotation, accuracy of seam wrapping, and save/reopen on device.
+- [x] Add stylized offline full-body procedural mannequin and selectable regions with closer camera views (source implemented, requires Android testing).
+- Source version v0.8.1, pending Android build and device verification of full-body view.
 - The procedural forearm is illustrative only. No anatomical accuracy, full-body rig, custom contour painting, or calibrated tattoo dimensions yet.
 
 ### v0.8 Android viewer loading correction
@@ -133,3 +134,16 @@
 - Replaced the module-based viewer entry point with standalone WebGL and inline shaders to avoid local-file ES-module loading failures on Android WebView.
 - Kept orbit/place modes, alpha tattoo texture mapping, size/rotation/opacity/wrap controls, and saved surface position.
 - Added a visible retry path when initialization fails; physical-device retest is required before treating this as fixed.
+
+## v0.8.1 — full-body placement prototype (pending device validation)
+- [x] Render full procedural mannequin (head, torso, pelvis, arms, hands, thighs, calves, feet).
+- [x] Choose whole-body overview or specific regions, including left/right limbs, chest, back and abdomen.
+- [x] Maintain selected tattoo location while viewing whole body, and zoom toward chosen region.
+- [x] Improve touch placement using mesh-triangle barycentric interpolation and smooth position transitions.
+- [x] Preserve tattoo alpha and wrap to the selected mesh with independent opacity, rotation, scale and wrap width.
+- [x] Save chosen body part and normalized surface coordinates per project (legacy forearm saves supported approximately).
+- [x] Stay offline using the working single-file WebGL viewer; no module imports or network.
+- [ ] Compile in GitHub Actions and confirm full-body display, gesture movement, side views and restoration on Android.
+- [ ] Upgrade to properly licensed realistic anatomical GLB meshes after correctness and performance are confirmed.
+- [ ] Support seamless ink across multiple body meshes, articulated posing and physical body-measurement calibration.
+- Important: The new mannequin is a *stylized segmented approximation*, not a realistic human anatomy scan. Tattoo wrap does not yet cross body-part seams.
