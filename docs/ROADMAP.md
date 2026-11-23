@@ -120,10 +120,16 @@
 - [x] Approve separate, offline 3D Placement Studio architecture (Flutter + bundled Three.js WebView).
 - [x] Define proof-of-concept stages and acceptance criteria in [3D_PLACEMENT_PLAN.md](3D_PLACEMENT_PLAN.md).
 - [x] Add offline turnable forearm proxy and bundled Three.js renderer source (Android behavior unverified).
-- [x] Implement mesh-conforming decal projection in Three.js (requires on-device visual verification).
+- [x] Implement surface-conforming tattoo texture mapping on a 3D forearm mesh (requires on-device visual verification).
 - [x] Add Orbit/Place modes, tap-to-anchor, scale, rotation, opacity and projection-depth controls.
 - [x] Add per-project placement autosave/reload independent from design layers.
-- [ ] Compile and validate on a physical Android device, including WebGL import-map/module loading, texture upload, gestures and projected decal wrap.
+- [ ] Compile and validate on a physical Android device, including standalone WebGL initialization, texture upload, gestures and surface texture wrap.
 - [ ] Expand anatomy only after surface-wrapping proof passes.
 - Version remains v0.7 until the v0.8 build and actual 3D placement behavior are verified.
 - The procedural forearm is illustrative only. No anatomical accuracy, full-body rig, custom contour painting, or calibrated tattoo dimensions yet.
+
+### v0.8 Android viewer loading correction
+- Initial on-device screenshot showed `net::ERR_FAILED` and a persistent spinner after Three.js module loading.
+- Replaced the module-based viewer entry point with standalone WebGL and inline shaders to avoid local-file ES-module loading failures on Android WebView.
+- Kept orbit/place modes, alpha tattoo texture mapping, size/rotation/opacity/wrap controls, and saved surface position.
+- Added a visible retry path when initialization fails; physical-device retest is required before treating this as fixed.
