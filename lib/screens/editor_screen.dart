@@ -518,7 +518,7 @@ class _EditorScreenState extends State<EditorScreen> {
       );
       if (!mounted) return;
       await Navigator.of(context).push<void>(MaterialPageRoute(
-        builder: (_) => PlacementScreen(artworkPng: preview, projectId: _project.id),
+        builder: (_) => PlacementScreen(artworkPng: preview, projectId: _project.id, project: _project),
       ));
     } catch (error) {
       if (mounted) _toast('3D preview failed: ' + error.toString());
