@@ -103,3 +103,15 @@
 - [ ] Verify compilation, workflow success and on-device UI/export.
 - [ ] Physical size and DPI control, transfer-printer calibration and high-fidelity line cleanup remain future work.
 - Stencil preview is for design review only, not a validated ready-to-transfer tattoo stencil.
+
+## v0.7.0 — actual artwork physical print width
+- [x] Specify intended visible-artwork width in inches or centimeters (0.5–8 in).
+- [x] Select 150 or 300 DPI and see the calculated output pixel width.
+- [x] Automatically trim transparent margins before sizing.
+- [x] Export opaque-white or transparent PNG while retaining image aspect ratio.
+- [x] Add PNG pHYs physical resolution metadata and preserve it on stencil exports.
+- [x] Add unit tests for crop-to-artwork sizing and PNG encoding.
+- [ ] Verify GitHub Actions Android build and real printer behavior.
+- Print at 100% / Actual Size and disable scaling. Some print apps ignore PNG DPI metadata.
+- Enlarging a low-resolution image does not recover lost line detail.
+- Current PNG export is not a professionally calibrated transfer-stencil workflow.
