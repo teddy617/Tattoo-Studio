@@ -85,7 +85,7 @@ opt=opt||{};
 const axis=normalized(end.map((v,i)=>v-start[i]));
 let side=normalized([1,0,0].map((v,i)=>v-axis[i]*axis[0]));
 if(Math.hypot(...side)<.1)side=[0,0,1];
-const front=normalized(cross(side,axis)); // With downward axes, front points toward +Z.
+const front=normalized(cross(axis,side)); // Downward axis gives front toward +Z.
 const length=Math.hypot(...end.map((v,i)=>v-start[i]));
 const rings=opt.rings||26,segments=opt.segments||48,verts=[],indices=[],points=[];
 function shape(v){
@@ -254,7 +254,7 @@ else selected=focusRegion;
 centerU=best.U;centerV=best.V;
 return true;
 }
-let active=new Map(),lastX=0,lastY=0,pinching=false,lastPinch=0,lastSave=0;
+let active=new Map(),pinching=false,lastPinch=0,lastSave=0,lastPick=0;
 canvas.addEventListener('pointerdown',e=>{
 canvas.setPointerCapture(e.pointerId);
 active.set(e.pointerId,{x:e.clientX,y:e.clientY});
@@ -272,8 +272,11 @@ lastPinch=d;pinching=true;return;
 const dx=e.clientX-prev.x,dy=e.clientY-prev.y;
 if(mode==='orbit'){
 yaw+=dx*.009;pitch=clamp(pitch+dy*.006,-1.25,1.25);
-}else if(pick(e.clientX,e.clientY)&&performance.now()-lastSave>120){
-save();lastSave=performance.now();
+}else if(performance.now()-lastPick>35){
+  if(pick(e.clientX,e.clientY)&&performance.now()-lastSave>120){
+    save();lastSave=performance.now();
+  }
+  lastPick=performance.now();
 }
 });
 canvas.addEventListener('pointerup',e=>{
