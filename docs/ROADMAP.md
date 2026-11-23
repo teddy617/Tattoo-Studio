@@ -147,3 +147,18 @@
 - [ ] Upgrade to properly licensed realistic anatomical GLB meshes after correctness and performance are confirmed.
 - [ ] Support seamless ink across multiple body meshes, articulated posing and physical body-measurement calibration.
 - Important: The new mannequin is a *stylized segmented approximation*, not a realistic human anatomy scan. Tattoo wrap does not yet cross body-part seams.
+
+## v0.9.0 — detailed anatomy and multi-tattoo placement (source implemented; device test pending)
+- [x] Bundle an offline MakeHuman hm08 CC0 real human surface mesh with file-specific provenance in `assets/placement/models/NOTICE.md`.
+- [x] Replace simplified mannequin rendering with anatomical mesh where supported; retain Basic fallback.
+- [x] Segment mesh into selectable anatomical surface regions using approximate body-space bounds.
+- [x] Render multiple independent alpha PNG textures simultaneously, depth-tested against other body parts.
+- [x] Add tattoo from device gallery or any current project layer and cap at 12 for initial GPU memory protection.
+- [x] Select/remove individual tattoos, change size, rotation, opacity, wrapping width and visibility.
+- [x] Save per-tattoo image assets and transforms in local project storage independently from editable 2D layers.
+- [x] Add scrollable placement settings while keeping sufficient 3D viewing area.
+- [x] Add image conversion tests for alpha preservation, input validation, and maximum image dimensions.
+- [ ] Compile with GitHub Actions; check model load and 3D placement on physical Android.
+- [ ] Verify reopening project restores every tattoo and body location, including older single-tattoo saves.
+- [ ] Add finer body-region boundaries, seamless cross-region ink projection, calibrated physical dimensions, and multiple realistic body shapes.
+- **Limitations:** Anatomical model is a generic static A-pose, not rigged; selection regions and generated UVs are approximate. Fine tattoos may distort at region boundaries. Current overlay stacking is simple draw order, not skin-physics simulation.
