@@ -18,6 +18,7 @@ import 'eraser_screen.dart';
 import 'import_screen.dart';
 import 'stencil_screen.dart';
 import 'print_settings_screen.dart';
+import 'placement_screen.dart';
 import '../services/print_export.dart';
 
 enum _ImportMode { smartCrop, splitSheet, unchanged }
@@ -503,6 +504,19 @@ class _EditorScreenState extends State<EditorScreen> {
     }
   }
 
+  Future<void> _open3dPlacement() async {
+    if (_busy) return;
+    try {
+      final png = await _captureArtboard(transparent: true);
+      if (!mounted) return;
+      await Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => PlacementScreen(artworkPng: png),
+      ));
+    } catch (error) {
+      if (mounted) _toast('3D preview failed: ' + error.toString());
+    }
+  }
+
   Future<void> _openStencil() async {
     if (_busy) return;
     final options = await Navigator.of(context).push<PrintOptions>(
@@ -776,6 +790,8 @@ class _EditorScreenState extends State<EditorScreen> {
                 _exportPng(transparent: true);
               } else if (value == 'stencil') {
                 _openStencil();
+              } else if (value == 'placement') {
+                _open3dPlacement();
               }
             },
             itemBuilder: (_) => const [
@@ -785,6 +801,8 @@ class _EditorScreenState extends State<EditorScreen> {
                   child: Text('Export PNG (transparent)')),
               PopupMenuItem(value: 'stencil',
                   child: Text('Stencil preparation')),
+              PopupMenuItem(value: 'placement',
+                  child: Text('3D placement preview')),
             ],
           ),
         ],
