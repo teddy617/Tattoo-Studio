@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#202127}
+canvas{width:100%;height:100%;display:block;touch-action:none}
+#status{position:absolute;bottom:9px;left:8px;right:8px;color:#ddd;text-align:center;font:12px sans-serif;pointer-events:none}
+</style></head><body><canvas id="view"></canvas><div id="status">Loading body model…</div>
+<script>
+'use strict';
+// Offline, procedural full-body WebGL prototype. No network requests or third-party meshes.
+(function(){
+const canvas=document.getElementById('view'),label=document.getElementById('status');
+const bridge=value=>{if(window.PlacementBridge)window.PlacementBridge.postMessage(value)};
+const notify=value=>{label.textContent=value;if(value!=='ready')bridge(value)};
+window.addEventListener('error',e=>notify('3D viewer error: '+e.message));
+const gl=canvas.getContext('webgl',{antialias:true,alpha:false});
+if(!gl){notify('WebGL is not available on this device');return}
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const skin=[.71,.51,.44];
+const VS=[
+'attribute vec3 aPos;attribute vec3 aNormal;attribute vec2 aUV;',
+'uniform vec3 uFocus;uniform float uYaw,uPitch,uDistance,uAspect;',
+'varying vec3 vNormal;varying vec2 vUV;',
+'void main(){',
+'float c=cos(uYaw),s=sin(uYaw),cp=cos(uPitch),sp=sin(uPitch);',
+'vec3 p=aPos-uFocus;',
+'vec3 r=vec3(c*p.x+s*p.z,p.y,-s*p.x+c*p.z);',
+'r=vec3(r.x,cp*r.y-sp*r.z,sp*r.y+cp*r.z);',
+'vec3 n=vec3(c*aNormal.x+s*aNormal.z,aNormal.y,-s*aNormal.x+c*aNormal.z);',
+'vNormal=normalize(vec3(n.x,cp*n.y-sp*n.z,sp*n.y+cp*n.z));',
+'float z=max(.1,uDistance-r.z);',
+'gl_Position=vec4(2.65*r.x/(uAspect*z),2.65*r.y/z,(z-2.0)/12.0,1.0);',
+'vUV=aUV;',
+'}'
+].join('\n');
+const FS=[
+'precision mediump float;',
+'varying vec3 vNormal;varying vec2 vUV;',
+'uniform vec3 uSkin;',
+'uniform sampler2D uInk;',
+'uniform float uInkEnabled,uOpacity,uWidth,uAngle,uWrap,uCenterU,uCenterV,uImageRatio,uSelected;',
+'void main(){',
+'float light=.65+.35*max(.0,dot(normalize(vNormal),normalize(vec3(.38,.55,1.))));',
+'vec3 base=uSkin*light;',
+'vec4 ink=vec4(0.);',
+'if(uSelected>.5&&uInkEnabled>.5){',
+'float du=fract(vUV.x-uCenterU+.5)-.5;',
+'float dv=vUV.y-uCenterV;',
+'float width=max(.015,uWidth*(.56+.44*uWrap));',
+'float height=max(.015,uWidth*.65*uImageRatio);',
+'vec2 p=vec2(du/width,dv/height);',
+'float c=cos(uAngle),s=sin(uAngle);',
+'p=vec2(c*p.x-s*p.y,s*p.x+c*p.y)+.5;',
+'if(p.x>=.0&&p.x<=1.&&p.y>=.0&&p.y<=1.) ink=texture2D(uInk,p);',
+'}',
+'gl_FragColor=vec4(mix(base,ink.rgb*light,ink.a*uOpacity),1.);',
+'}'
+].join('\n');
+function shader(type,source){
+const h=gl.createShader(type);gl.shaderSource(h,source);gl.compileShader(h);
+if(!gl.getShaderParameter(h,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(h));return h;
+}
+let program;
+try{
+program=gl.createProgram();
+gl.attachShader(program,shader(gl.VERTEX_SHADER,VS));
+gl.attachShader(program,shader(gl.FRAGMENT_SHADER,FS));
+gl.linkProgram(program);
+if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program));
+}catch(e){notify('3D shader failed: '+e.message);return}
+gl.useProgram(program);
+const uni=name=>gl.getUniformLocation(program,name);
+const u={focus:uni('uFocus'),yaw:uni('uYaw'),pitch:uni('uPitch'),distance:uni('uDistance'),aspect:uni('uAspect'),
+skin:uni('uSkin'),enabled:uni('uInkEnabled'),opacity:uni('uOpacity'),width:uni('uWidth'),angle:uni('uAngle'),
+wrap:uni('uWrap'),centerU:uni('uCenterU'),centerV:uni('uCenterV'),ratio:uni('uImageRatio'),selected:uni('uSelected')};
+const meshes=[];
+function cross(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]]}
+function dot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]}
+function normalized(a){const d=Math.hypot(...a)||1;return a.map(v=>v/d)}
+// Profile tube with elliptical cross sections and smooth radii interpolation.
+// Its UVs stick to each body-part surface as the model rotates.
+function tube(id,start,end,profile,opt){
+opt=opt||{};
+const axis=normalized(end.map((v,i)=>v-start[i]));
+let side=normalized([1,0,0].map((v,i)=>v-axis[i]*axis[0]));
+if(Math.hypot(...side)<.1)side=[0,0,1];
+const front=normalized(cross(side,axis)); // With downward axes, front points toward +Z.
+const length=Math.hypot(...end.map((v,i)=>v-start[i]));
+const rings=opt.rings||26,segments=opt.segments||48,verts=[],indices=[],points=[];
+function shape(v){
+const pos=v*(profile.length-1),index=Math.min(profile.length-2,Math.floor(pos)),t=pos-index;
+return [lerp(profile[index][0],profile[index+1][0],t),
+lerp(profile[index][1],profile[index+1][1],t)];
+}
+for(let row=0;row<=rings;row++){
+const v=row/rings,center=start.map((a,i)=>a+axis[i]*length*v),r=shape(v);
+for(let col=0;col<=segments;col++){
+const angle=col/segments*Math.PI*2,cs=Math.cos(angle),sn=Math.sin(angle);
+const nx=side.map((a,i)=>a*sn/r[0]+front[i]*cs/r[1]);
+const n=normalized(nx),p=center.map((a,i)=>a+side[i]*r[0]*sn+front[i]*r[1]*cs);
+verts.push(...p,...n,col/segments,v);points.push(p);
+}
+}
+for(let row=0;row<rings;row++)for(let col=0;col<segments;col++){
+const i=row*(segments+1)+col;
+indices.push(i,i+segments+1,i+1,i+1,i+segments+1,i+segments+2);
+}
+const vb=gl.createBuffer(),ib=gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER,vb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(verts),gl.STATIC_DRAW);
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(indices),gl.STATIC_DRAW);
+meshes.push({id,vb,ib,points,indices,verts,count:indices.length,center:start.map((a,i)=>(a+end[i])/2),isBack:!!opt.back});
+}
+// A deliberately simplified figure; anatomical GLB models are a later milestone.
+tube('head',[0,3.10,0],[0,2.28,0],[[.11,.13],[.29,.28],[.32,.30],[.27,.27],[.09,.13]]);
+tube('neck',[0,2.31,0],[0,2.02,0],[[.13,.13],[.16,.15],[.18,.17]]);
+tube('torso',[0,2.02,0],[0,.48,0],[[.28,.23],[.66,.35],[.70,.37],[.54,.29],[.40,.28]]);
+tube('pelvis',[0,.49,0],[0,-.21,0],[[.40,.29],[.55,.32],[.50,.32],[.36,.26]]);
+function limb(side){
+const sign=side==='left'?-1:1,tag=side==='left'?'left':'right';
+tube(tag+'UpperArm',[sign*.73,1.82,0],[sign*.92,.67,0],[[.24,.25],[.25,.26],[.19,.20]]);
+tube(tag+'Forearm',[sign*.92,.70,0],[sign*1.04,-.34,.05],[[.20,.21],[.18,.19],[.115,.13]]);
+tube(tag+'Hand',[sign*1.04,-.31,.05],[sign*1.06,-.68,.10],[[.14,.09],[.14,.08],[.09,.07]]);
+tube(tag+'Thigh',[sign*.31,-.16,0],[sign*.34,-1.77,.02],[[.29,.31],[.29,.29],[.19,.20]]);
+tube(tag+'Calf',[sign*.34,-1.75,.02],[sign*.33,-3.05,.12],[[.19,.20],[.23,.24],[.12,.13]]);
+tube(tag+'Foot',[sign*.33,-3.02,.05],[sign*.33,-3.30,.20],[[.13,.19],[.16,.26],[.13,.21]]);
+}
+limb('left');limb('right');
+const regions={
+full:null,head:'head',chest:'torso',back:'torso',abdomen:'torso',pelvis:'pelvis',
+leftUpperArm:'leftUpperArm',rightUpperArm:'rightUpperArm',
+leftForearm:'leftForearm',rightForearm:'rightForearm',
+leftThigh:'leftThigh',rightThigh:'rightThigh',
+leftCalf:'leftCalf',rightCalf:'rightCalf',
+leftHand:'leftHand',rightHand:'rightHand',leftFoot:'leftFoot',rightFoot:'rightFoot'
+};
+const meshBy=id=>meshes.find(m=>m.id===id);
+let selected='rightForearm',focusRegion='full',mode='orbit';
+let yaw=.22,pitch=.03,distance=10.7,focus=[0,0,0],targetDistance=10.7,targetFocus=[0,0,0];
+let size=.65,opacity=.9,rotation=0,wrap=.65,centerU=0,centerV=.52;
+let renderedU=0,renderedV=.52,hasInk=false,imageRatio=1;
+const texture=gl.createTexture();
+gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,texture);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([255,255,255,0]));
+gl.uniform1i(uni('uInk'),0);
+gl.enable(gl.DEPTH_TEST);
+gl.disable(gl.CULL_FACE);
+function save(){
+const angle=centerU*Math.PI*2;
+bridge(JSON.stringify({type:'state',bodyPart:selected,viewPart:focusRegion,
+centerU,centerV,point:[Math.sin(angle),centerV,Math.cos(angle)],normal:[Math.sin(angle),0,Math.cos(angle)]}));
+}
+function view(region,autoPlace){
+if(!Object.prototype.hasOwnProperty.call(regions,region))region='full';
+focusRegion=region;
+if(region==='full'){
+targetFocus=[0,-.06,0];targetDistance=10.7;
+}else{
+const id=regions[region],mesh=meshBy(id);
+targetFocus=mesh?mesh.center.slice():[0,0,0];
+targetDistance=id==='torso'?3.9:id==='head'?3.1:2.9;
+if(region==='back')yaw=Math.PI;
+if(autoPlace&&id){
+selected=region;
+centerU=region==='back'?.5:0;
+centerV=region==='abdomen'?.22:.5;
+}
+}
+save();
+}
+window.selectPart=function(region){view(region,true)};
+window.setTattoo=function(uri){
+const image=new Image();
+image.onload=function(){
+gl.bindTexture(gl.TEXTURE_2D,texture);
+gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);
+imageRatio=image.height/image.width;hasInk=true;
+label.textContent='Tattoo wraps selected body surface';
+};
+image.onerror=()=>notify('Could not load tattoo artwork');
+image.src=uri;
+};
+window.setPlacement=function(raw){
+const p=typeof raw==='string'?JSON.parse(raw):raw;
+if(typeof p.opacity==='number')opacity=clamp(p.opacity,0,1);
+if(typeof p.scale==='number')size=clamp(p.scale,.15,1.5);
+if(typeof p.rotation==='number')rotation=p.rotation*Math.PI/180;
+if(typeof p.depth==='number')wrap=clamp(p.depth,.15,1.2);
+};
+window.restorePlacement=function(raw){
+const p=typeof raw==='string'?JSON.parse(raw):raw;
+window.setPlacement(p);
+if(typeof p.bodyPart==='string'&&regions[p.bodyPart])selected=p.bodyPart;
+else if(typeof p.bodyPart==='string'&&Object.prototype.hasOwnProperty.call(regions,p.bodyPart))selected=p.bodyPart;
+if(typeof p.centerU==='number')centerU=p.centerU;
+else if(Array.isArray(p.point))centerU=Math.atan2(p.point[0],p.point[2])/(2*Math.PI);
+if(typeof p.centerV==='number')centerV=p.centerV;
+else if(Array.isArray(p.point))centerV=p.point[1]>1?(.5+p.point[1]/2.6):.5;
+view(p.viewPart&&Object.prototype.hasOwnProperty.call(regions,p.viewPart)?p.viewPart:'full',false);
+};
+window.setMode=function(value){mode=value==='place'?'place':'orbit';label.textContent=mode==='place'?'Drag on the model to reposition the tattoo':'Drag to orbit • Pinch to zoom'};
+window.resetPlacement=function(){centerU=0;centerV=.5;size=.65;renderedU=centerU;renderedV=centerV;save()};
+function transform(p){
+const q=p.map((v,i)=>v-focus[i]);
+const c=Math.cos(yaw),s=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+const x=c*q[0]+s*q[2],z=-s*q[0]+c*q[2];
+return [x,cp*q[1]-sp*z,sp*q[1]+cp*z];
+}
+function projected(p){
+const r=transform(p),z=distance-r[2],aspect=canvas.width/canvas.height;
+return [(1+2.65*r[0]/(aspect*z))*canvas.width/2,
+(1-2.65*r[1]/z)*canvas.height/2,z];
+}
+// Triangle-accurate screen-space picking: barycentric UV on nearest surface.
+// Unlike the old closest-vertex method this can select between vertices smoothly.
+function pick(clientX,clientY){
+const box=canvas.getBoundingClientRect();
+const x=(clientX-box.left)*canvas.width/box.width,y=(clientY-box.top)*canvas.height/box.height;
+let best=null,bestDepth=Infinity;
+for(const mesh of meshes){
+const allow=focusRegion==='full'||regions[focusRegion]===mesh.id;
+if(!allow)continue;
+const projectedVertices=mesh.points.map(projected);
+for(let t=0;t<mesh.indices.length;t+=3){
+const ia=mesh.indices[t],ib=mesh.indices[t+1],ic=mesh.indices[t+2];
+const a=projectedVertices[ia],b=projectedVertices[ib],c=projectedVertices[ic];
+if(a[2]<=0||b[2]<=0||c[2]<=0)continue;
+const denom=(b[1]-c[1])*(a[0]-c[0])+(c[0]-b[0])*(a[1]-c[1]);
+if(Math.abs(denom)<.000001)continue;
+const u=((b[1]-c[1])*(x-c[0])+(c[0]-b[0])*(y-c[1]))/denom;
+const v=((c[1]-a[1])*(x-c[0])+(a[0]-c[0])*(y-c[1]))/denom;
+const w=1-u-v;
+if(u<-.001||v<-.001||w<-.001)continue;
+const inverse=u/a[2]+v/b[2]+w/c[2],depth=1/inverse;
+if(depth>=bestDepth)continue;
+const uvA=mesh.verts.slice(ia*8+6,ia*8+8);
+const uvB=mesh.verts.slice(ib*8+6,ib*8+8);
+const uvC=mesh.verts.slice(ic*8+6,ic*8+8);
+const aw=u/a[2]/inverse,bw=v/b[2]/inverse,cw=w/c[2]/inverse;
+bestDepth=depth;
+best={mesh,U:uvA[0]*aw+uvB[0]*bw+uvC[0]*cw,
+V:uvA[1]*aw+uvB[1]*bw+uvC[1]*cw};
+}
+}
+if(!best)return;
+const match=Object.keys(regions).find(key=>key!=='full'&&regions[key]===best.mesh.id);
+if(focusRegion==='full')selected=best.mesh.id==='torso'?(best.U>.25&&best.U<.75?'back':'chest'):(match||'chest');
+else selected=focusRegion;
+centerU=best.U;centerV=best.V;
+return true;
+}
+let active=new Map(),lastX=0,lastY=0,pinching=false,lastPinch=0,lastSave=0;
+canvas.addEventListener('pointerdown',e=>{
+canvas.setPointerCapture(e.pointerId);
+active.set(e.pointerId,{x:e.clientX,y:e.clientY});
+lastX=e.clientX;lastY=e.clientY;
+});
+canvas.addEventListener('pointermove',e=>{
+if(!active.has(e.pointerId))return;
+const prev=active.get(e.pointerId);
+active.set(e.pointerId,{x:e.clientX,y:e.clientY});
+if(active.size>=2){
+const pts=[...active.values()],d=Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y);
+if(lastPinch)targetDistance=clamp(targetDistance*lastPinch/d,2.25,15);
+lastPinch=d;pinching=true;return;
+}
+const dx=e.clientX-prev.x,dy=e.clientY-prev.y;
+if(mode==='orbit'){
+yaw+=dx*.009;pitch=clamp(pitch+dy*.006,-1.25,1.25);
+}else if(pick(e.clientX,e.clientY)&&performance.now()-lastSave>120){
+save();lastSave=performance.now();
+}
+});
+canvas.addEventListener('pointerup',e=>{
+if(mode==='place'&&!pinching)pick(e.clientX,e.clientY);
+active.delete(e.pointerId);
+if(active.size<2)lastPinch=0;
+if(active.size===0){pinching=false;if(mode==='place')save();}
+});
+canvas.addEventListener('pointercancel',e=>{active.delete(e.pointerId);lastPinch=0;pinching=false});
+canvas.addEventListener('wheel',e=>{e.preventDefault();targetDistance=clamp(targetDistance*(1+Math.sign(e.deltaY)*.07),2.25,15)},{passive:false});
+function render(){
+const dpr=Math.min(devicePixelRatio||1,2),w=Math.max(1,Math.round(canvas.clientWidth*dpr)),
+h=Math.max(1,Math.round(canvas.clientHeight*dpr));
+if(w!==canvas.width||h!==canvas.height){canvas.width=w;canvas.height=h}
+distance=lerp(distance,targetDistance,.15);
+focus=focus.map((value,i)=>lerp(value,targetFocus[i],.14));
+let diff=((centerU-renderedU+.5)%1+1)%1-.5;
+renderedU+=diff*.24;
+renderedV=lerp(renderedV,centerV,.24);
+gl.viewport(0,0,w,h);gl.clearColor(.12,.13,.16,1);
+gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+gl.useProgram(program);
+gl.uniform3fv(u.focus,focus);
+gl.uniform1f(u.yaw,yaw);gl.uniform1f(u.pitch,pitch);gl.uniform1f(u.distance,distance);
+gl.uniform1f(u.aspect,w/h);gl.uniform3fv(u.skin,skin);
+gl.uniform1f(u.enabled,hasInk?1:0);gl.uniform1f(u.opacity,opacity);
+gl.uniform1f(u.width,size);gl.uniform1f(u.angle,rotation);
+gl.uniform1f(u.wrap,wrap);gl.uniform1f(u.centerU,renderedU);
+gl.uniform1f(u.centerV,renderedV);gl.uniform1f(u.ratio,clamp(imageRatio,.2,4));
+for(const mesh of meshes){
+gl.uniform1f(u.selected,regions[selected]===mesh.id?1:0);
+gl.bindBuffer(gl.ARRAY_BUFFER,mesh.vb);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,mesh.ib);
+for(const [name,offset,arity] of [['aPos',0,3],['aNormal',3,3],['aUV',6,2]]){
+const loc=gl.getAttribLocation(program,name);
+if(loc<0)continue;
+gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,arity,gl.FLOAT,false,32,offset*4);
+}
+gl.drawElements(gl.TRIANGLES,mesh.count,gl.UNSIGNED_SHORT,0);
+}
+requestAnimationFrame(render);
+}
+try{render();label.textContent='Drag to orbit • Pinch to zoom';bridge('ready')}
+catch(e){notify('3D initialization error: '+e.message)}
+})();
+</script></body></html>
