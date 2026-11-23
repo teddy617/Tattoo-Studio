@@ -39,12 +39,14 @@ const FS=[
 'varying vec3 vNormal;varying vec2 vUV;',
 'uniform vec3 uSkin;',
 'uniform sampler2D uInk;',
-'uniform float uInkEnabled,uOpacity,uWidth,uAngle,uWrap,uCenterU,uCenterV,uImageRatio,uSelected;',
+'uniform float uInkEnabled,uOpacity,uWidth,uAngle,uWrap,uCenterU,uCenterV,uImageRatio,uSelected,uPass;',
 'void main(){',
 'float light=.65+.35*max(.0,dot(normalize(vNormal),normalize(vec3(.38,.55,1.))));',
 'vec3 base=uSkin*light;',
+'if(uPass<.5){gl_FragColor=vec4(base,1.);return;}',
+'if(uSelected<.5||uInkEnabled<.5) discard;',
 'vec4 ink=vec4(0.);',
-'if(uSelected>.5&&uInkEnabled>.5){',
+'{',
 'float du=fract(vUV.x-uCenterU+.5)-.5;',
 'float dv=vUV.y-uCenterV;',
 'float width=max(.015,uWidth*(.56+.44*uWrap));',
@@ -54,7 +56,8 @@ const FS=[
 'p=vec2(c*p.x-s*p.y,s*p.x+c*p.y)+.5;',
 'if(p.x>=.0&&p.x<=1.&&p.y>=.0&&p.y<=1.) ink=texture2D(uInk,p);',
 '}',
-'gl_FragColor=vec4(mix(base,ink.rgb*light,ink.a*uOpacity),1.);',
+'if(ink.a<.002)discard;',
+'gl_FragColor=vec4(ink.rgb*light,ink.a*uOpacity);',
 '}'
 ].join('\n');
 function shader(type,source){
@@ -73,7 +76,7 @@ gl.useProgram(program);
 const uni=name=>gl.getUniformLocation(program,name);
 const u={focus:uni('uFocus'),yaw:uni('uYaw'),pitch:uni('uPitch'),distance:uni('uDistance'),aspect:uni('uAspect'),
 skin:uni('uSkin'),enabled:uni('uInkEnabled'),opacity:uni('uOpacity'),width:uni('uWidth'),angle:uni('uAngle'),
-wrap:uni('uWrap'),centerU:uni('uCenterU'),centerV:uni('uCenterV'),ratio:uni('uImageRatio'),selected:uni('uSelected')};
+wrap:uni('uWrap'),centerU:uni('uCenterU'),centerV:uni('uCenterV'),ratio:uni('uImageRatio'),selected:uni('uSelected'),pass:uni('uPass')};
 const meshes=[];
 function cross(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]]}
 function dot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]}
@@ -135,76 +138,140 @@ leftCalf:'leftCalf',rightCalf:'rightCalf',
 leftHand:'leftHand',rightHand:'rightHand',leftFoot:'leftFoot',rightFoot:'rightFoot'
 };
 const meshBy=id=>meshes.find(m=>m.id===id);
-let selected='rightForearm',focusRegion='full',mode='orbit';
+
+let focusRegion='full',mode='orbit';
 let yaw=.22,pitch=.03,distance=10.7,focus=[0,0,0],targetDistance=10.7,targetFocus=[0,0,0];
-let size=.65,opacity=.9,rotation=0,wrap=.65,centerU=0,centerV=.52;
-let renderedU=0,renderedV=.52,hasInk=false,imageRatio=1;
-const texture=gl.createTexture();
-gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,texture);
-gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
-gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
-gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
-gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
-gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([255,255,255,0]));
-gl.uniform1i(uni('uInk'),0);
-gl.enable(gl.DEPTH_TEST);
-gl.disable(gl.CULL_FACE);
+// Each tattoo carries an independent GPU texture, selected anatomical region,
+// UV anchor, orientation and alpha. Rendered anchors are eased for smoother drag.
+const tattoos=new Map();
+const order=[];
+let activeId='current';
+const defaults=(id)=>({
+ id,bodyPart:'rightForearm',centerU:0,centerV:.52,
+ drawnU:0,drawnV:.52,scale:.65,rotation:0,opacity:.9,depth:.65,
+ imageRatio:1,texture:null,visible:true
+});
+function current(){return tattoos.get(activeId)}
+function uploadTexture(id,uri,initial){
+ if(!tattoos.has(id)){
+  if(order.length>=12){notify('Maximum 12 tattoos in preview');return}
+  tattoos.set(id,defaults(id));order.push(id);
+ }
+ const tattoo=tattoos.get(id);
+ if(initial && typeof initial==='object')Object.assign(tattoo,initial);
+ const img=new Image();
+ img.onload=()=>{
+  if(tattoo.texture)gl.deleteTexture(tattoo.texture);
+  const tex=gl.createTexture();gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D,tex);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);
+  tattoo.texture=tex;tattoo.imageRatio=img.height/img.width;
+  label.textContent='Multiple tattoos placed on independent body surfaces';
+  save();
+ };
+ img.onerror=()=>notify('Could not load tattoo image');
+ img.src=uri;
+}
 function save(){
-const angle=centerU*Math.PI*2;
-bridge(JSON.stringify({type:'state',bodyPart:selected,viewPart:focusRegion,
-centerU,centerV,point:[Math.sin(angle),centerV,Math.cos(angle)],normal:[Math.sin(angle),0,Math.cos(angle)]}));
+ bridge(JSON.stringify({type:'state',activeId,viewPart:focusRegion,
+ tattoos:order.map(id=>{
+   const t=tattoos.get(id);
+   return {id,bodyPart:t.bodyPart,centerU:t.centerU,centerV:t.centerV,
+    scale:t.scale,rotation:t.rotation,opacity:t.opacity,depth:t.depth,
+    visible:t.visible};
+ })}));
 }
 function view(region,autoPlace){
-if(!Object.prototype.hasOwnProperty.call(regions,region))region='full';
-focusRegion=region;
-if(region==='full'){
-targetFocus=[0,-.06,0];targetDistance=10.7;
-}else{
-const id=regions[region],mesh=meshBy(id);
-targetFocus=mesh?mesh.center.slice():[0,0,0];
-targetDistance=id==='torso'?3.9:id==='head'?3.1:2.9;
-if(region==='back')yaw=Math.PI;
-if(autoPlace&&id){
-selected=region;
-centerU=region==='back'?.5:0;
-centerV=region==='abdomen'?.22:.5;
-}
-}
-save();
+ if(!Object.prototype.hasOwnProperty.call(regions,region))region='full';
+ focusRegion=region;
+ if(region==='full'){
+  targetFocus=[0,-.06,0];targetDistance=10.7;
+ }else{
+  const id=regions[region],mesh=meshBy(id);
+  targetFocus=mesh?mesh.center.slice():[0,0,0];
+  targetDistance=id==='torso'?3.9:id==='head'?3.1:2.9;
+  if(region==='back')yaw=Math.PI;
+  const t=current();
+  if(autoPlace&&id&&t){
+   t.bodyPart=region;
+   t.centerU=region==='back'?.5:0;
+   t.centerV=region==='abdomen'?.22:.5;
+  }
+ }
+ save();
 }
 window.selectPart=function(region){view(region,true)};
-window.setTattoo=function(uri){
-const image=new Image();
-image.onload=function(){
-gl.bindTexture(gl.TEXTURE_2D,texture);
-gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
-gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);
-imageRatio=image.height/image.width;hasInk=true;
-label.textContent='Tattoo wraps selected body surface';
+window.setTattoo=function(uri){uploadTexture('current',uri)};
+window.addTattoo=function(id,uri,state){
+ uploadTexture(String(id),uri,state||null);
+ activeId=String(id);
+ save();
 };
-image.onerror=()=>notify('Could not load tattoo artwork');
-image.src=uri;
+window.selectTattoo=function(id){
+ if(!tattoos.has(id))return;
+ activeId=id;
+ const t=current();
+ if(focusRegion!=='full' && regions[focusRegion]!==regions[t.bodyPart])
+   view(t.bodyPart,false);
+ save();
+};
+window.removeTattoo=function(id){
+ if(id==='current')return;
+ const t=tattoos.get(id);
+ if(!t)return;
+ if(t.texture)gl.deleteTexture(t.texture);
+ tattoos.delete(id);
+ const i=order.indexOf(id);if(i>=0)order.splice(i,1);
+ if(activeId===id)activeId='current';
+ save();
 };
 window.setPlacement=function(raw){
-const p=typeof raw==='string'?JSON.parse(raw):raw;
-if(typeof p.opacity==='number')opacity=clamp(p.opacity,0,1);
-if(typeof p.scale==='number')size=clamp(p.scale,.15,1.5);
-if(typeof p.rotation==='number')rotation=p.rotation*Math.PI/180;
-if(typeof p.depth==='number')wrap=clamp(p.depth,.15,1.2);
+ const p=typeof raw==='string'?JSON.parse(raw):raw;
+ const t=current();if(!t)return;
+ if(typeof p.opacity==='number')t.opacity=clamp(p.opacity,0,1);
+ if(typeof p.scale==='number')t.scale=clamp(p.scale,.15,1.5);
+ if(typeof p.rotation==='number')t.rotation=clamp(p.rotation,-180,180);
+ if(typeof p.depth==='number')t.depth=clamp(p.depth,.15,1.2);
+ if(typeof p.visible==='boolean')t.visible=p.visible;
 };
 window.restorePlacement=function(raw){
-const p=typeof raw==='string'?JSON.parse(raw):raw;
-window.setPlacement(p);
-if(typeof p.bodyPart==='string'&&regions[p.bodyPart])selected=p.bodyPart;
-else if(typeof p.bodyPart==='string'&&Object.prototype.hasOwnProperty.call(regions,p.bodyPart))selected=p.bodyPart;
-if(typeof p.centerU==='number')centerU=p.centerU;
-else if(Array.isArray(p.point))centerU=Math.atan2(p.point[0],p.point[2])/(2*Math.PI);
-if(typeof p.centerV==='number')centerV=p.centerV;
-else if(Array.isArray(p.point))centerV=p.point[1]>1?(.5+p.point[1]/2.6):.5;
-view(p.viewPart&&Object.prototype.hasOwnProperty.call(regions,p.viewPart)?p.viewPart:'full',false);
+ const p=typeof raw==='string'?JSON.parse(raw):raw;
+ if(Array.isArray(p.tattoos)){
+  for(const record of p.tattoos){
+   const t=tattoos.get(record.id);
+   if(!t)continue;
+   Object.assign(t,record);
+   t.drawnU=t.centerU;t.drawnV=t.centerV;
+  }
+  if(tattoos.has(p.activeId))activeId=p.activeId;
+ }else{
+  const t=current();
+  if(t){
+   window.setPlacement(p);
+   if(typeof p.bodyPart==='string'&&Object.prototype.hasOwnProperty.call(regions,p.bodyPart))t.bodyPart=p.bodyPart;
+   if(typeof p.centerU==='number')t.centerU=p.centerU;
+   else if(Array.isArray(p.point))t.centerU=Math.atan2(p.point[0],p.point[2])/(2*Math.PI);
+   if(typeof p.centerV==='number')t.centerV=p.centerV;
+   t.drawnU=t.centerU;t.drawnV=t.centerV;
+  }
+ }
+ view(p.viewPart&&Object.prototype.hasOwnProperty.call(regions,p.viewPart)?p.viewPart:'full',false);
+ save();
 };
-window.setMode=function(value){mode=value==='place'?'place':'orbit';label.textContent=mode==='place'?'Drag on the model to reposition the tattoo':'Drag to orbit • Pinch to zoom'};
-window.resetPlacement=function(){centerU=0;centerV=.5;size=.65;renderedU=centerU;renderedV=centerV;save()};
+window.setMode=function(value){
+ mode=value==='place'?'place':'orbit';
+ label.textContent=mode==='place'?'Drag the active tattoo along the body':'Drag to orbit • Pinch to zoom';
+};
+window.resetPlacement=function(){
+ const t=current();if(!t)return;
+ Object.assign(t,{centerU:0,centerV:.5,drawnU:0,drawnV:.5,scale:.65,rotation:0,opacity:.9,depth:.65});
+ save();
+};
 function transform(p){
 const q=p.map((v,i)=>v-focus[i]);
 const c=Math.cos(yaw),s=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
@@ -249,9 +316,10 @@ V:uvA[1]*aw+uvB[1]*bw+uvC[1]*cw};
 }
 if(!best)return;
 const match=Object.keys(regions).find(key=>key!=='full'&&regions[key]===best.mesh.id);
-if(focusRegion==='full')selected=best.mesh.id==='torso'?(best.U>.25&&best.U<.75?'back':'chest'):(match||'chest');
-else selected=focusRegion;
-centerU=best.U;centerV=best.V;
+const t=current();if(!t)return false;
+if(focusRegion==='full')t.bodyPart=best.mesh.id==='torso'?(best.U>.25&&best.U<.75?'back':'chest'):(match||'chest');
+else t.bodyPart=focusRegion;
+t.centerU=best.U;t.centerV=best.V;
 return true;
 }
 let active=new Map(),pinching=false,lastPinch=0,lastSave=0,lastPick=0;
@@ -293,29 +361,52 @@ h=Math.max(1,Math.round(canvas.clientHeight*dpr));
 if(w!==canvas.width||h!==canvas.height){canvas.width=w;canvas.height=h}
 distance=lerp(distance,targetDistance,.15);
 focus=focus.map((value,i)=>lerp(value,targetFocus[i],.14));
-let diff=((centerU-renderedU+.5)%1+1)%1-.5;
-renderedU+=diff*.24;
-renderedV=lerp(renderedV,centerV,.24);
 gl.viewport(0,0,w,h);gl.clearColor(.12,.13,.16,1);
 gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
 gl.useProgram(program);
 gl.uniform3fv(u.focus,focus);
 gl.uniform1f(u.yaw,yaw);gl.uniform1f(u.pitch,pitch);gl.uniform1f(u.distance,distance);
 gl.uniform1f(u.aspect,w/h);gl.uniform3fv(u.skin,skin);
-gl.uniform1f(u.enabled,hasInk?1:0);gl.uniform1f(u.opacity,opacity);
-gl.uniform1f(u.width,size);gl.uniform1f(u.angle,rotation);
-gl.uniform1f(u.wrap,wrap);gl.uniform1f(u.centerU,renderedU);
-gl.uniform1f(u.centerV,renderedV);gl.uniform1f(u.ratio,clamp(imageRatio,.2,4));
-for(const mesh of meshes){
-gl.uniform1f(u.selected,regions[selected]===mesh.id?1:0);
-gl.bindBuffer(gl.ARRAY_BUFFER,mesh.vb);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,mesh.ib);
-for(const [name,offset,arity] of [['aPos',0,3],['aNormal',3,3],['aUV',6,2]]){
-const loc=gl.getAttribLocation(program,name);
-if(loc<0)continue;
-gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,arity,gl.FLOAT,false,32,offset*4);
+
+// Draw all opaque anatomy into the depth buffer, then composite each tattoo
+// in its own pass with depth-test enabled. This preserves occlusion behind limbs.
+function drawMesh(mesh){
+ gl.bindBuffer(gl.ARRAY_BUFFER,mesh.vb);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,mesh.ib);
+ for(const [name,offset,arity] of [['aPos',0,3],['aNormal',3,3],['aUV',6,2]]){
+  const loc=gl.getAttribLocation(program,name);
+  if(loc<0)continue;
+  gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,arity,gl.FLOAT,false,32,offset*4);
+ }
+ gl.drawElements(gl.TRIANGLES,mesh.count,gl.UNSIGNED_SHORT,0);
 }
-gl.drawElements(gl.TRIANGLES,mesh.count,gl.UNSIGNED_SHORT,0);
+gl.uniform1f(u.pass,0);gl.depthMask(true);gl.disable(gl.BLEND);
+for(const mesh of meshes)drawMesh(mesh);
+gl.enable(gl.BLEND);
+gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+gl.depthMask(false);
+gl.depthFunc(gl.LEQUAL);
+gl.uniform1f(u.pass,1);gl.uniform1f(u.enabled,1);
+for(const id of order){
+ const t=tattoos.get(id);
+ if(!t||!t.texture||t.visible===false)continue;
+ let diff=((t.centerU-t.drawnU+.5)%1+1)%1-.5;
+ t.drawnU+=diff*.25;
+ t.drawnV=lerp(t.drawnV,t.centerV,.25);
+ gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,t.texture);
+ gl.uniform1f(u.opacity,t.opacity);
+ gl.uniform1f(u.width,t.scale);
+ gl.uniform1f(u.angle,t.rotation*Math.PI/180);
+ gl.uniform1f(u.wrap,t.depth);
+ gl.uniform1f(u.centerU,t.drawnU);
+ gl.uniform1f(u.centerV,t.drawnV);
+ gl.uniform1f(u.ratio,clamp(t.imageRatio,.2,4));
+ for(const mesh of meshes){
+  if(regions[t.bodyPart]!==mesh.id)continue;
+  gl.uniform1f(u.selected,1);
+  drawMesh(mesh);
+ }
 }
+gl.depthMask(true);gl.disable(gl.BLEND);
 requestAnimationFrame(render);
 }
 try{render();label.textContent='Drag to orbit • Pinch to zoom';bridge('ready')}
