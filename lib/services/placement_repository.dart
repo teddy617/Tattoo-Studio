@@ -28,7 +28,7 @@ class PlacementRepository {
     final temporary = File('${directory.path}/placement.tmp');
     await temporary.writeAsString(jsonEncode({
       'schemaVersion': 1,
-      'modelVersion': 'forearm-proxy-1',
+      'modelVersion': 'anatomy-mainbody-v2',
       ...state,
     }), flush: true);
     await temporary.rename(destination.path);
