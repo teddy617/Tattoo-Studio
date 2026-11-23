@@ -96,6 +96,27 @@ window.setPlacement = (raw) => {
   placement = { ...placement, ...values };
   updateDecal();
 };
+window.restorePlacement = (raw) => {
+  const state = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  if (Array.isArray(state.point) && state.point.length === 3) {
+    point.fromArray(state.point);
+  }
+  if (Array.isArray(state.normal) && state.normal.length === 3) {
+    normal.fromArray(state.normal);
+  }
+  if (state.opacity !== undefined) {
+    placement = { ...placement, opacity: state.opacity,
+      scale: state.scale, rotation: state.rotation, depth: state.depth };
+  }
+  updateDecal();
+};
+function saveState() {
+  send(JSON.stringify({
+    type: 'state',
+    point: point.toArray(),
+    normal: normal.toArray(),
+  }));
+}
 window.setMode = (next) => {
   mode = next === 'place' ? 'place' : 'orbit';
   controls.enabled = mode === 'orbit';
@@ -107,6 +128,7 @@ window.resetPlacement = () => {
   point.set(0, 0, 0.53);
   normal.set(0, 0, 1);
   updateDecal();
+  saveState();
 };
 function pointerPosition(event) {
   const bounds = renderer.domElement.getBoundingClientRect();
@@ -128,6 +150,7 @@ renderer.domElement.addEventListener('pointerup', event => {
   point.copy(hit.point);
   normal.copy(hit.face.normal).transformDirection(forearm.matrixWorld);
   updateDecal();
+  saveState();
   send('placed');
 });
 function frame() {
