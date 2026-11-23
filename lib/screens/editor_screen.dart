@@ -329,6 +329,16 @@ class _EditorScreenState extends State<EditorScreen> {
         _busy = true;
         _selectedId = null;
       });
+      // Wait for all non-destructive masks before capturing the PNG.
+      await Future.wait(
+        _project.layers
+            .where((layer) =>
+                layer.maskStrokes.isNotEmpty &&
+                _images.containsKey(layer.assetPath))
+            .map((layer) => _maskedBytes(layer, _images[layer.assetPath]!)),
+      );
+      if (!mounted) return;
+      setState(() {});
       await WidgetsBinding.instance.endOfFrame;
       final boundary = _artboardKey.currentContext?.findRenderObject();
       if (boundary is! RenderRepaintBoundary) {
