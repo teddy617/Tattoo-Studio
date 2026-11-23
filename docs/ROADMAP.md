@@ -162,3 +162,16 @@
 - [ ] Verify reopening project restores every tattoo and body location, including older single-tattoo saves.
 - [ ] Add finer body-region boundaries, seamless cross-region ink projection, calibrated physical dimensions, and multiple realistic body shapes.
 - **Limitations:** Anatomical model is a generic static A-pose, not rigged; selection regions and generated UVs are approximate. Fine tattoos may distort at region boundaries. Current overlay stacking is simple draw order, not skin-physics simulation.
+
+## v0.9.1 — surface projection and approximate tattoo sizing (source implemented; Android test pending)
+- [x] Replace region-specific UV stamping with world-space tangent-plane projection anchored on the actual chosen mesh surface.
+- [x] Permit tattoos to span adjacent mesh-region boundaries where geometry, depth and facing angle allow; clamp back-face bleeding.
+- [x] Store per-tattoo surface position and normal, with migration fallback for previously saved UV-only placements.
+- [x] Reset the anchor to the newly selected body part rather than leaving it on the last limb.
+- [x] Add a per-tattoo width control in centimeters, stored independently for each design.
+- [x] Smooth on-screen movement between surface anchors and cache projected mesh vertices to reduce touch lag.
+- [x] Keep independent tattoo layering, visibility and local per-project persistence.
+- [ ] Verify actual WebGL shader compilation, wrap appearance, camera motion and tattoo persistence on Android.
+- [ ] Calibrate physical dimensions to the mannequin's actual height and measurements; presently assumes an illustrative 170 cm body.
+- [ ] Replace tangent-plane projection with geodesic/UV or surface-patch method for strong curvature and complex joint wraps.
+- This is *not* accurate transfer-stencil sizing: the preview width is approximate and the 2D print export remains separately calibrated.
