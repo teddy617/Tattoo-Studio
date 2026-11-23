@@ -245,6 +245,94 @@ class _EditorScreenState extends State<EditorScreen> {
     _persist();
   }
 
+  void _selectBelow() {
+    final current = _selected;
+    if (current == null) return;
+    final cx = current.x + current.width / 2;
+    final cy = current.y + current.height / 2;
+    final candidates = _project.layers.where((layer) =>
+        layer.visible &&
+        cx >= layer.x && cx <= layer.x + layer.width &&
+        cy >= layer.y && cy <= layer.y + layer.height).toList();
+    if (candidates.length < 2) {
+      _toast('No other layer overlaps this position. Try Layers.');
+      return;
+    }
+    final index = candidates.indexWhere((layer) => layer.id == current.id);
+    final next = index <= 0 ? candidates.last : candidates[index - 1];
+    setState(() => _selectedId = next.id);
+  }
+
+  Future<void> _preciseMove() async {
+    if (_selected == null || _selected!.locked) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, refresh) {
+          final layer = _selected;
+          if (layer == null) return const SizedBox.shrink();
+          void shift(double dx, double dy) {
+            _editSelected((old) =>
+                old.copyWith(x: old.x + dx, y: old.y + dy));
+            refresh(() {});
+          }
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Precision placement',
+                      style: Theme.of(context).textTheme.titleMedium),
+                  Text('X: ${layer.x.toStringAsFixed(1)}   '
+                      'Y: ${layer.y.toStringAsFixed(1)}'),
+                  for (final increment in [1.0, 10.0])
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        Text('${increment.toInt()} px'),
+                        IconButton(
+                          tooltip: 'Move left',
+                          onPressed: () => shift(-increment, 0),
+                          icon: const Icon(Icons.arrow_back),
+                        ),
+                        IconButton(
+                          tooltip: 'Move up',
+                          onPressed: () => shift(0, -increment),
+                          icon: const Icon(Icons.arrow_upward),
+                        ),
+                        IconButton(
+                          tooltip: 'Move down',
+                          onPressed: () => shift(0, increment),
+                          icon: const Icon(Icons.arrow_downward),
+                        ),
+                        IconButton(
+                          tooltip: 'Move right',
+                          onPressed: () => shift(increment, 0),
+                          icon: const Icon(Icons.arrow_forward),
+                        ),
+                      ],
+                    ),
+                  OutlinedButton(
+                    onPressed: () {
+                      _editSelected((old) => old.copyWith(
+                        x: (canvasWidth - old.width) / 2,
+                        y: (canvasHeight - old.height) / 2,
+                      ));
+                      refresh(() {});
+                    },
+                    child: const Text('Center layer on canvas'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _eraseSelected() async {
     final selected = _selected;
     if (selected == null || selected.locked || _busy) return;
@@ -763,6 +851,9 @@ class _EditorScreenState extends State<EditorScreen> {
                                         ))),
                             _tool(Icons.auto_fix_off, 'Erase',
                                 selected.locked ? null : _eraseSelected),
+                            _tool(Icons.tune, 'Position',
+                                selected.locked ? null : _preciseMove),
+                            _tool(Icons.layers_clear, 'Below', _selectBelow),
                             _tool(Icons.content_copy, 'Duplicate', _duplicate),
                             _tool(Icons.vertical_align_top, 'Forward',
                                 () => _moveSelected(1)),
