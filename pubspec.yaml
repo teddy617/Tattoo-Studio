@@ -24,3 +24,5 @@ flutter:
   uses-material-design: true
   assets:
     - assets/placement/viewer.html
+    - assets/placement/viewer.js
+    - assets/placement/vendor/
