@@ -33,7 +33,7 @@
 - [ ] Style reference collection and user-created templates
 - [ ] Brush drawing and editable text/lettering
 - [ ] Accurate measurements in inches/cm, size presets, 300 DPI export
-- [ ] Placement previews with uploaded body photographs
+- [ ] 3D placement previews on a freely turnable model with tattoo geometry conforming to its surface (see 3D_PLACEMENT_PLAN.md)
 
 ## Phase 2 — optional intelligence
 - [ ] On-device segmentation model for textured backgrounds
@@ -115,3 +115,13 @@
 - Print at 100% / Actual Size and disable scaling. Some print apps ignore PNG DPI metadata.
 - Enlarging a low-resolution image does not recover lost line detail.
 - Current PNG export is not a professionally calibrated transfer-stencil workflow.
+
+## v0.8 — planned 3D tattoo placement prototype
+- [x] Approve separate, offline 3D Placement Studio architecture (Flutter + bundled Three.js WebView).
+- [x] Define proof-of-concept stages and acceptance criteria in [3D_PLACEMENT_PLAN.md](3D_PLACEMENT_PLAN.md).
+- [ ] Render a rotatable forearm proxy in an offline WebView.
+- [ ] Project the current tattoo as a surface-conforming decal, not a flat screen overlay.
+- [ ] Add orbit/place modes, scale, rotate, opacity and projection-depth controls.
+- [ ] Persist placement independently from design layers, test Android device performance.
+- [ ] Expand anatomy only after surface-wrapping proof passes.
+- Version remains v0.7 until working v0.8 source implementation is ready and tested.
