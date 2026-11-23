@@ -81,3 +81,14 @@
 - [x] Unit tests for mask rendering and project compatibility.
 - [ ] Verify Flutter compilation, Android device behavior, and build workflow.
 - This is a raster eraser, not a vector-editing or smart object-removal tool.
+
+## v0.5.0 — canvas precision controls
+- [x] Separate Edit and Navigate modes to avoid competing layer gestures.
+- [x] Navigate with pinch zoom (up to 8x) and pan; reset zoom button.
+- [x] Snap selected layers to canvas center within a 12 px tolerance.
+- [x] Show alignment guidelines during snapping; guides excluded from PNG export.
+- [x] Nudge selected layers by 1 px or 10 px; center a layer precisely.
+- [x] Cycle to an overlapping layer beneath the current selection, with Layers list fallback.
+- [x] Unit tests for center snap geometry.
+- [ ] Verify Android build, multi-touch behavior, and on-device export.
+- Viewport zoom is not saved as part of the project and does not change exported image resolution.
