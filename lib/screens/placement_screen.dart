@@ -239,9 +239,21 @@ class _PlacementScreenState extends State<PlacementScreen> {
     final snapshot = <String, dynamic>{
       'activeId': _activeTattooId,
       'viewPart': _viewPart,
-      'tattoos': _tattoos.map((t) => {
-        ...t,
-        ...?previous[t['id']],
+      'tattoos': _tattoos.map((t) {
+        final record = <String, dynamic>{
+          ...t,
+          ...?previous[t['id']],
+        };
+        if (t['id'] == _activeTattooId) {
+          record.addAll({
+            'scale': _size,
+            'rotation': _rotation,
+            'opacity': _opacity,
+            'depth': _depth,
+            'visible': _tattooVisible,
+          });
+        }
+        return record;
       }).toList(),
     };
     _saveChain = _saveChain.then(
