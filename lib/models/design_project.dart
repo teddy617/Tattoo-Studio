@@ -8,6 +8,26 @@ String makeId() {
   return '${DateTime.now().microsecondsSinceEpoch}_$random';
 }
 
+class MaskStroke {
+  const MaskStroke({required this.points, required this.radius});
+  /// [x,y] pairs normalized to the original image dimensions.
+  final List<List<double>> points;
+  /// Brush radius, normalized to the smaller image dimension.
+  final double radius;
+
+  Map<String, dynamic> toJson() => {
+        'points': points,
+        'radius': radius,
+      };
+
+  factory MaskStroke.fromJson(Map<String, dynamic> json) => MaskStroke(
+        points: (json['points'] as List<dynamic>).map((item) =>
+            (item as List<dynamic>).map((v) => (v as num).toDouble()).toList()
+        ).toList(),
+        radius: (json['radius'] as num).toDouble(),
+      );
+}
+
 class DesignLayer {
   const DesignLayer({
     required this.id,
@@ -21,6 +41,7 @@ class DesignLayer {
     this.visible = true,
     this.locked = false,
     this.flipX = false,
+    this.maskStrokes = const [],
   });
 
   final String id;
@@ -34,6 +55,7 @@ class DesignLayer {
   final bool visible;
   final bool locked;
   final bool flipX;
+  final List<MaskStroke> maskStrokes;
 
   DesignLayer copyWith({
     String? name,
@@ -45,6 +67,7 @@ class DesignLayer {
     bool? visible,
     bool? locked,
     bool? flipX,
+    List<MaskStroke>? maskStrokes,
   }) =>
       DesignLayer(
         id: id,
@@ -58,6 +81,7 @@ class DesignLayer {
         visible: visible ?? this.visible,
         locked: locked ?? this.locked,
         flipX: flipX ?? this.flipX,
+        maskStrokes: maskStrokes ?? this.maskStrokes,
       );
 
   Map<String, dynamic> toJson() => {
@@ -72,6 +96,7 @@ class DesignLayer {
         'visible': visible,
         'locked': locked,
         'flipX': flipX,
+        'maskStrokes': maskStrokes.map((stroke) => stroke.toJson()).toList(),
       };
 
   factory DesignLayer.fromJson(Map<String, dynamic> json) => DesignLayer(
@@ -86,6 +111,9 @@ class DesignLayer {
         visible: json['visible'] as bool? ?? true,
         locked: json['locked'] as bool? ?? false,
         flipX: json['flipX'] as bool? ?? false,
+        maskStrokes: ((json['maskStrokes'] as List<dynamic>?) ?? const [])
+            .map((value) => MaskStroke.fromJson(value as Map<String, dynamic>))
+            .toList(),
       );
 }
 
