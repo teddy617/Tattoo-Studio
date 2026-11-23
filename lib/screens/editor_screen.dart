@@ -222,6 +222,35 @@ class _EditorScreenState extends State<EditorScreen> {
     _persist();
   }
 
+  Future<void> _eraseSelected() async {
+    final selected = _selected;
+    if (selected == null || selected.locked || _busy) return;
+    final bytes = _images[selected.assetPath];
+    if (bytes == null) {
+      _toast('Image is still loading.');
+      return;
+    }
+    final updated = await Navigator.of(context).push<List<MaskStroke>>(
+      MaterialPageRoute(
+        builder: (_) => EraserScreen(
+          original: bytes,
+          initialStrokes: selected.maskStrokes,
+        ),
+      ),
+    );
+    if (!mounted || updated == null) return;
+    _editSelected((layer) => layer.copyWith(maskStrokes: updated));
+  }
+
+  Future<Uint8List> _maskedBytes(DesignLayer layer, Uint8List original) {
+    if (layer.maskStrokes.isEmpty) return Future.value(original);
+    final signature = jsonEncode(layer.maskStrokes.map((e) => e.toJson()).toList());
+    final key = layer.id + ':' + signature;
+    if (_maskRenders.length > 45) _maskRenders.clear();
+    return _maskRenders.putIfAbsent(key,
+        () => MaskEngine.apply(original, layer.maskStrokes));
+  }
+
   void _duplicate() {
     final original = _selected;
     if (original == null) return;
