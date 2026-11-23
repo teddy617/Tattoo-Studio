@@ -17,6 +17,8 @@ import '../services/mask_engine.dart';
 import 'eraser_screen.dart';
 import 'import_screen.dart';
 import 'stencil_screen.dart';
+import 'print_settings_screen.dart';
+import '../services/print_export.dart';
 
 enum _ImportMode { smartCrop, splitSheet, unchanged }
 
@@ -478,31 +480,50 @@ class _EditorScreenState extends State<EditorScreen> {
 
   Future<void> _exportPng({bool transparent = false}) async {
     if (_busy) return;
+    final options = await Navigator.of(context).push<PrintOptions>(
+      MaterialPageRoute(
+        builder: (_) => PrintSettingsScreen(
+          initialTransparent: transparent,
+        ),
+      ),
+    );
+    if (options == null || !mounted) return;
     try {
-      final png = await _captureArtboard(transparent: transparent);
-      final file = await _repository.writeExport(_project.id, png);
+      final capture = await _captureArtboard(transparent: true);
+      final output = await PrintExport.prepare(capture, options);
+      final file = await _repository.writeExport(_project.id, output);
       await SharePlus.instance.share(ShareParams(
         files: [XFile(file.path)],
-        text: '${_project.name} — Tattoo Studio',
+        text: _project.name + ' — Tattoo Studio, '
+            + options.widthInches.toStringAsFixed(2) + ' inches at '
+            + options.dpi.toString() + ' DPI. Print at 100%.',
       ));
     } catch (error) {
-      if (mounted) _toast('Export failed: $error');
+      if (mounted) _toast('Export failed: ' + error.toString());
     }
   }
 
   Future<void> _openStencil() async {
     if (_busy) return;
+    final options = await Navigator.of(context).push<PrintOptions>(
+      MaterialPageRoute(
+        builder: (_) => const PrintSettingsScreen(stencil: true),
+      ),
+    );
+    if (options == null || !mounted) return;
     try {
-      final png = await _captureArtboard(transparent: true);
+      final capture = await _captureArtboard(transparent: true);
+      final sized = await PrintExport.prepare(capture, options);
       if (!mounted) return;
       await Navigator.of(context).push<void>(MaterialPageRoute(
         builder: (_) => StencilScreen(
-          compositePng: png,
+          compositePng: sized,
           projectId: _project.id,
+          dpi: options.dpi,
         ),
       ));
     } catch (error) {
-      if (mounted) _toast('Stencil preview failed: $error');
+      if (mounted) _toast('Stencil preview failed: ' + error.toString());
     }
   }
 
