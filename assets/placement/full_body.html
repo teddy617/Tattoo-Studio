@@ -489,7 +489,7 @@ function drawMesh(mesh){
  gl.drawElements(gl.TRIANGLES,mesh.count,gl.UNSIGNED_SHORT,0);
 }
 gl.uniform1f(u.pass,0);gl.depthMask(true);gl.disable(gl.BLEND);
-for(const mesh of meshes)drawMesh(mesh);
+for(const mesh of activeMeshes)drawMesh(mesh);
 gl.enable(gl.BLEND);
 gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
 gl.depthMask(false);
@@ -509,7 +509,7 @@ for(const id of order){
  gl.uniform1f(u.centerU,t.drawnU);
  gl.uniform1f(u.centerV,t.drawnV);
  gl.uniform1f(u.ratio,clamp(t.imageRatio,.2,4));
- for(const mesh of meshes){
+ for(const mesh of activeMeshes){
   if(regions[t.bodyPart]!==mesh.id)continue;
   gl.uniform1f(u.selected,1);
   drawMesh(mesh);
