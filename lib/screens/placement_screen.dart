@@ -61,6 +61,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
   bool _restoring = false;
   bool _detailedAnatomy = true;
   bool _anatomyLoaded = false;
+  bool _tattooVisible = true;
   String _activeTattooId = 'current';
   List<Map<String, dynamic>> _tattoos = [
     {'id': 'current', 'name': 'Current design'},
@@ -114,6 +115,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
                     _rotation = ((t['rotation'] as num?)?.toDouble() ?? 0).clamp(-180, 180);
                     _opacity = ((t['opacity'] as num?)?.toDouble() ?? .9).clamp(0, 1);
                     _depth = ((t['depth'] as num?)?.toDouble() ?? .65).clamp(.15, 1.2);
+                    _tattooVisible = t['visible'] != false;
                   });
                 }
                 if (!_restoring) _saveState();
@@ -341,6 +343,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
       'scale': _size,
       'rotation': _rotation,
       'depth': _depth,
+      'visible': _tattooVisible,
     });
     await _controller.runJavaScript('setPlacement(' + jsonEncode(data) + ')');
   }
@@ -448,9 +451,12 @@ class _PlacementScreenState extends State<PlacementScreen> {
               Row(children: [
                 Expanded(
                   child: FilledButton.tonalIcon(
-                    onPressed: _ready ? _sendArtwork : null,
+                    onPressed: _ready ? () async {
+                      await _sendArtwork();
+                      await _selectTattoo('current');
+                    } : null,
                     icon: const Icon(Icons.layers),
-                    label: const Text('Place current design'),
+                    label: const Text('Refresh current design'),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -507,6 +513,17 @@ class _PlacementScreenState extends State<PlacementScreen> {
                   icon: const Icon(Icons.delete_outline),
                 ),
               ]),
+              SwitchListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Show selected tattoo'),
+                value: _tattooVisible,
+                onChanged: (visible) {
+                  setState(() => _tattooVisible = visible);
+                  _syncPlacement();
+                  _saveState();
+                },
+              ),
               _slider('Size', _size, .15, 1.5, (v) => _size = v),
               _slider('Rotation', _rotation, -180, 180, (v) => _rotation = v),
               _slider('Opacity', _opacity, 0, 1, (v) => _opacity = v),
