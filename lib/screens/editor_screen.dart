@@ -43,6 +43,17 @@ class _EditorScreenState extends State<EditorScreen> {
   Offset _gestureDrag = Offset.zero;
   double _boardScale = 1;
   bool _busy = false;
+  bool _navigationMode = false;
+  bool _showGuides = true;
+  bool _nearVerticalGuide = false;
+  bool _nearHorizontalGuide = false;
+  final TransformationController _viewTransform = TransformationController();
+
+  @override
+  void dispose() {
+    _viewTransform.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -198,17 +209,25 @@ class _EditorScreenState extends State<EditorScreen> {
 
   void _updateGesture(DesignLayer layer, ScaleUpdateDetails details) {
     final start = _gestureStart;
-    if (start == null || layer.locked || start.id != layer.id) return;
+    if (_navigationMode || start == null || layer.locked || start.id != layer.id) return;
     _gestureDrag += details.focalPointDelta / _boardScale;
     final zoom = details.scale.clamp(0.12, 8.0).toDouble();
     final width = (start.width * zoom).clamp(24.0, 2400.0).toDouble();
     final height = (start.height * zoom).clamp(24.0, 3200.0).toDouble();
     final index = _project.layers.indexWhere((item) => item.id == layer.id);
     if (index < 0) return;
+    var nextX = start.x + _gestureDrag.dx + (start.width - width) / 2;
+    var nextY = start.y + _gestureDrag.dy + (start.height - height) / 2;
+    final snapX = (nextX + width / 2 - canvasWidth / 2).abs() < 12;
+    final snapY = (nextY + height / 2 - canvasHeight / 2).abs() < 12;
+    if (_showGuides && snapX) nextX = (canvasWidth - width) / 2;
+    if (_showGuides && snapY) nextY = (canvasHeight - height) / 2;
     setState(() {
+      _nearVerticalGuide = _showGuides && snapX;
+      _nearHorizontalGuide = _showGuides && snapY;
       _project.layers[index] = start.copyWith(
-        x: start.x + _gestureDrag.dx + (start.width - width) / 2,
-        y: start.y + _gestureDrag.dy + (start.height - height) / 2,
+        x: nextX,
+        y: nextY,
         width: width,
         height: height,
         rotation: start.rotation + details.rotation,
@@ -219,6 +238,10 @@ class _EditorScreenState extends State<EditorScreen> {
   void _endGesture(DesignLayer layer) {
     if (_gestureStart?.id != layer.id) return;
     _gestureStart = null;
+    setState(() {
+      _nearVerticalGuide = false;
+      _nearHorizontalGuide = false;
+    });
     _persist();
   }
 
@@ -476,12 +499,15 @@ class _EditorScreenState extends State<EditorScreen> {
         angle: layer.rotation,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => setState(() => _selectedId = layer.id),
-          onScaleStart: layer.locked ? null : (_) => _beginGesture(layer),
-          onScaleUpdate: layer.locked
+          onTap: _navigationMode ? null :
+              () => setState(() => _selectedId = layer.id),
+          onScaleStart: layer.locked || _navigationMode
+              ? null : (_) => _beginGesture(layer),
+          onScaleUpdate: layer.locked || _navigationMode
               ? null
               : (details) => _updateGesture(layer, details),
-          onScaleEnd: layer.locked ? null : (_) => _endGesture(layer),
+          onScaleEnd: layer.locked || _navigationMode
+              ? null : (_) => _endGesture(layer),
           child: Container(
             width: layer.width,
             height: layer.height,
