@@ -235,9 +235,15 @@ window.finishAnatomy=function(){
  }
 };
 window.setAnatomyMode=function(value){
+ const before=activeMeshes;
  preferDetailed=value==='detailed';
  useDetailed=preferDetailed&&detailedMeshes!==null;
  activeMeshes=useDetailed?detailedMeshes:proxyMeshes;
+ if(before!==activeMeshes){
+  for(const t of tattoos.values()){
+   t.anchor=null;t.normal=null;t.drawnAnchor=null;
+  }
+ }
  view(focusRegion,false);
 };
 const regions={
@@ -367,11 +373,13 @@ window.setPlacement=function(raw){
 };
 window.restorePlacement=function(raw){
  const p=typeof raw==='string'?JSON.parse(raw):raw;
+ const oldGeometry=p.modelVersion!=='anatomy-mainbody-v2';
  if(Array.isArray(p.tattoos)){
   for(const record of p.tattoos){
    const t=tattoos.get(record.id);
    if(!t)continue;
    Object.assign(t,record);
+   if(oldGeometry){t.anchor=null;t.normal=null;t.drawnAnchor=null;}
    t.drawnU=t.centerU;t.drawnV=t.centerV;
    if(Array.isArray(t.anchor))t.drawnAnchor=t.anchor.slice();
   }
@@ -384,6 +392,7 @@ window.restorePlacement=function(raw){
    if(typeof p.centerU==='number')t.centerU=p.centerU;
    else if(Array.isArray(p.point))t.centerU=Math.atan2(p.point[0],p.point[2])/(2*Math.PI);
    if(typeof p.centerV==='number')t.centerV=p.centerV;
+   if(oldGeometry){t.anchor=null;t.normal=null;t.drawnAnchor=null;}
    t.drawnU=t.centerU;t.drawnV=t.centerV;
    if(Array.isArray(t.anchor))t.drawnAnchor=t.anchor.slice();
   }
