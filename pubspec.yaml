@@ -1,7 +1,7 @@
 name: tattoo_studio
 description: Local-first tattoo design editor with smart image extraction.
 publish_to: none
-version: 0.8.1+9
+version: 0.9.0+10
 
 environment:
   sdk: '>=3.12.0 <4.0.0'
@@ -24,4 +24,5 @@ flutter:
   uses-material-design: true
   assets:
     - assets/placement/full_body.html
+    - assets/placement/models/makehuman_cc0.obj
     - assets/placement/viewer.html
