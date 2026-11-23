@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models/design_project.dart';
 import '../services/project_repository.dart';
+import '../services/canvas_precision.dart';
 import '../services/smart_extract.dart';
 import '../services/mask_engine.dart';
 import 'eraser_screen.dart';
@@ -216,18 +217,21 @@ class _EditorScreenState extends State<EditorScreen> {
     final height = (start.height * zoom).clamp(24.0, 3200.0).toDouble();
     final index = _project.layers.indexWhere((item) => item.id == layer.id);
     if (index < 0) return;
-    var nextX = start.x + _gestureDrag.dx + (start.width - width) / 2;
-    var nextY = start.y + _gestureDrag.dy + (start.height - height) / 2;
-    final snapX = (nextX + width / 2 - canvasWidth / 2).abs() < 12;
-    final snapY = (nextY + height / 2 - canvasHeight / 2).abs() < 12;
-    if (_showGuides && snapX) nextX = (canvasWidth - width) / 2;
-    if (_showGuides && snapY) nextY = (canvasHeight - height) / 2;
+    final placement = snapToCanvasCenter(
+      x: start.x + _gestureDrag.dx + (start.width - width) / 2,
+      y: start.y + _gestureDrag.dy + (start.height - height) / 2,
+      width: width,
+      height: height,
+      canvasWidth: canvasWidth,
+      canvasHeight: canvasHeight,
+      enabled: _showGuides,
+    );
     setState(() {
-      _nearVerticalGuide = _showGuides && snapX;
-      _nearHorizontalGuide = _showGuides && snapY;
+      _nearVerticalGuide = placement.vertical;
+      _nearHorizontalGuide = placement.horizontal;
       _project.layers[index] = start.copyWith(
-        x: nextX,
-        y: nextY,
+        x: placement.x,
+        y: placement.y,
         width: width,
         height: height,
         rotation: start.rotation + details.rotation,
