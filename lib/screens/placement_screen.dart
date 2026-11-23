@@ -35,6 +35,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
   double _size = 0.65;
   double _rotation = 0;
   double _depth = 0.6;
+  double _widthCm = 8;
   bool _placeMode = false;
   String _viewPart = 'full';
   static const Map<String, String> _regions = {
@@ -115,6 +116,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
                     _rotation = ((t['rotation'] as num?)?.toDouble() ?? 0).clamp(-180, 180);
                     _opacity = ((t['opacity'] as num?)?.toDouble() ?? .9).clamp(0, 1);
                     _depth = ((t['depth'] as num?)?.toDouble() ?? .65).clamp(.15, 1.2);
+                    _widthCm = ((t['widthCm'] as num?)?.toDouble() ?? 8).clamp(1, 40);
                     _tattooVisible = t['visible'] != false;
                   });
                 }
@@ -250,6 +252,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
             'rotation': _rotation,
             'opacity': _opacity,
             'depth': _depth,
+            'widthCm': _widthCm,
             'visible': _tattooVisible,
           });
         }
@@ -355,6 +358,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
       'scale': _size,
       'rotation': _rotation,
       'depth': _depth,
+      'widthCm': _widthCm,
       'visible': _tattooVisible,
     });
     await _controller.runJavaScript('setPlacement(' + jsonEncode(data) + ')');
@@ -479,6 +483,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
                       _rotation = 0;
                       _opacity = .9;
                       _depth = .6;
+                      _widthCm = 8;
                     });
                     _syncPlacement();
                     _controller.runJavaScript('resetPlacement()');
@@ -536,13 +541,31 @@ class _PlacementScreenState extends State<PlacementScreen> {
                   _saveState();
                 },
               ),
+              Row(children: [
+                const SizedBox(width: 90, child: Text('Tattoo width')),
+                Expanded(child: Slider(
+                  value: _widthCm,
+                  min: 1,
+                  max: 40,
+                  divisions: 78,
+                  label: '${_widthCm.toStringAsFixed(1)} cm',
+                  onChanged: (v) {
+                    setState(() => _widthCm = v);
+                    _syncPlacement();
+                    _saveState();
+                  },
+                )),
+                SizedBox(width: 64,
+                  child: Text('${_widthCm.toStringAsFixed(1)} cm')),
+              ]),
               _slider('Size', _size, .15, 1.5, (v) => _size = v),
               _slider('Rotation', _rotation, -180, 180, (v) => _rotation = v),
               _slider('Opacity', _opacity, 0, 1, (v) => _opacity = v),
               _slider('Wrap depth', _depth, .15, 1.2, (v) => _depth = v),
               const Text(
                 'Select a tattoo to adjust it separately. Add designs from '
-                'the gallery or project layers. Anatomical proportions are approximate.',
+                'the gallery or project layers. Width is an approximate preview '
+                'measurement on a generic 170 cm body, not print calibration.',
                 style: TextStyle(fontSize: 11),
                 textAlign: TextAlign.center,
               ),
