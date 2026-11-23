@@ -76,7 +76,15 @@ class _PlacementScreenState extends State<PlacementScreen> {
           return NavigationDecision.navigate;
         },
         onWebResourceError: (error) {
+          if (error.isForMainFrame == false) return;
           if (mounted) setState(() => _error = error.description);
+        },
+        onPageFinished: (_) async {
+          // Detect failed script initialization instead of spinning forever.
+          await Future<void>.delayed(const Duration(seconds: 3));
+          if (mounted && !_ready && _error == null) {
+            setState(() => _error = '3D viewer could not initialize. Tap Retry.');
+          }
         },
       ))
       ..loadFlutterAsset('assets/placement/viewer.html');
@@ -141,16 +149,31 @@ class _PlacementScreenState extends State<PlacementScreen> {
           Expanded(
             child: Stack(children: [
               Positioned.fill(child: WebViewWidget(controller: _controller)),
-              if (!_ready)
+              if (!_ready && _error == null)
                 const Center(child: CircularProgressIndicator()),
               if (_error != null)
                 Positioned(
                   bottom: 8,
                   left: 8,
                   right: 8,
-                  child: Text(_error!,
-                    style: const TextStyle(color: Colors.amber),
-                    textAlign: TextAlign.center),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_error!,
+                        style: const TextStyle(color: Colors.amber),
+                        textAlign: TextAlign.center),
+                      if (!_ready)
+                        TextButton(
+                          onPressed: () {
+                            setState(() => _error = null);
+                            _controller.loadFlutterAsset(
+                              'assets/placement/viewer.html',
+                            );
+                          },
+                          child: const Text('Retry 3D viewer'),
+                        ),
+                    ],
+                  ),
                 ),
             ]),
           ),
