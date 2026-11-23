@@ -78,6 +78,10 @@ const u={focus:uni('uFocus'),yaw:uni('uYaw'),pitch:uni('uPitch'),distance:uni('u
 skin:uni('uSkin'),enabled:uni('uInkEnabled'),opacity:uni('uOpacity'),width:uni('uWidth'),angle:uni('uAngle'),
 wrap:uni('uWrap'),centerU:uni('uCenterU'),centerV:uni('uCenterV'),ratio:uni('uImageRatio'),selected:uni('uSelected'),pass:uni('uPass')};
 const meshes=[];
+const proxyMeshes=meshes;
+let detailedMeshes=null;
+let activeMeshes=meshes;
+let useDetailed=true;
 function cross(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]]}
 function dot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]}
 function normalized(a){const d=Math.hypot(...a)||1;return a.map(v=>v/d)}
@@ -129,6 +133,107 @@ tube(tag+'Calf',[sign*.34,-1.75,.02],[sign*.33,-3.05,.12],[[.19,.20],[.23,.24],[
 tube(tag+'Foot',[sign*.33,-3.02,.05],[sign*.33,-3.30,.20],[[.13,.19],[.16,.26],[.13,.21]]);
 }
 limb('left');limb('right');
+
+// MakeHuman hm08 CC0 mesh (provided by Flutter as bundled text to avoid
+// Android WebView file:// fetch/module restrictions). Proxy stays available.
+let anatomyParts=[];
+window.appendAnatomy=function(chunk){anatomyParts.push(chunk)};
+window.finishAnatomy=function(){
+ const source=anatomyParts.join('');anatomyParts=[];
+ try{
+  const lines=source.split('\n'),vertices=[],faces=[];
+  for(const line of lines){
+   if(line.startsWith('v ')){
+    const v=line.slice(2).trim().split(/\s+/).map(Number);
+    vertices.push([v[0]*.385,v[1]*.385,v[2]*.385]);
+   }else if(line.startsWith('f ')){
+    const ids=line.slice(2).trim().split(/\s+/).map(t=>Number(t)-1);
+    for(let i=1;i<ids.length-1;i++)faces.push([ids[0],ids[i],ids[i+1]]);
+   }
+  }
+  const normals=vertices.map(()=>[0,0,0]);
+  for(const [a,b,c] of faces){
+   const p=vertices[a],q=vertices[b],r=vertices[c];
+   const n=cross(q.map((v,i)=>v-p[i]),r.map((v,i)=>v-p[i]));
+   for(const idx of [a,b,c])for(let i=0;i<3;i++)normals[idx][i]+=n[i];
+  }
+  for(let i=0;i<normals.length;i++)normals[i]=normalized(normals[i]);
+  const groups=new Map();
+  function group(p){
+   const x=p[0],y=p[1];
+   if(y>2.30)return 'head';
+   if(y>1.95&&Math.abs(x)<.24)return 'neck';
+   if(y>.35 && Math.abs(x)>1.03){
+    const side=x<0?'left':'right',ab=Math.abs(x);
+    return side+(ab>1.68?'Hand':ab>1.30?'Forearm':'UpperArm');
+   }
+   if(y>.35)return 'torso';
+   if(y>-.15)return 'pelvis';
+   const side=x<0?'left':'right';
+   if(y< -2.85)return side+'Foot';
+   if(y< -1.65)return side+'Calf';
+   return side+'Thigh';
+  }
+  function uv(id,p){
+   const x=p[0],y=p[1],z=p[2];
+   const left=id.startsWith('left'),right=id.startsWith('right');
+   const limb=left||right;
+   const cx=limb?(left?-1.07:1.07):0;
+   const angle=Math.atan2(x-cx,z-.16)/(2*Math.PI);
+   let lo=-.15,hi=2.30;
+   if(id==='head'){lo=2.30;hi=3.28}
+   else if(id==='neck'){lo=1.95;hi=2.30}
+   else if(id==='pelvis'){lo=-.15;hi=.35}
+   else if(id.endsWith('Forearm')){lo=.35;hi=1.85}
+   else if(id.endsWith('UpperArm')){lo=.35;hi=2.1}
+   else if(id.endsWith('Hand')){lo=.35;hi=1.85}
+   else if(id.endsWith('Thigh')){lo=-1.65;hi=-.15}
+   else if(id.endsWith('Calf')){lo=-2.85;hi=-1.65}
+   else if(id.endsWith('Foot')){lo=-3.3;hi=-2.85}
+   return [((angle%1)+1)%1,clamp((y-lo)/(hi-lo),0,1)];
+  }
+  // For each face, classify by centroid and supply enough vertex/normal/UV
+  // data for the same interactive tattoo shader used by the proxy meshes.
+  for(const tri of faces){
+   const center=[0,0,0];
+   for(const idx of tri)for(let j=0;j<3;j++)center[j]+=vertices[idx][j]/3;
+   const id=group(center);
+   if(!groups.has(id))groups.set(id,{id,verts:[],points:[],indices:[],min:[Infinity,Infinity,Infinity],max:[-Infinity,-Infinity,-Infinity]});
+   const dest=groups.get(id);
+   for(const idx of tri){
+    const p=vertices[idx],n=normals[idx],tex=uv(id,p);
+    const next=dest.points.length;
+    dest.indices.push(next);
+    dest.points.push(p);
+    dest.verts.push(...p,...n,...tex);
+    for(let j=0;j<3;j++){dest.min[j]=Math.min(dest.min[j],p[j]);dest.max[j]=Math.max(dest.max[j],p[j])}
+   }
+  }
+  const out=[];
+  for(const data of groups.values()){
+   if(data.indices.length>65000)throw Error('Mesh too large: '+data.id);
+   const vb=gl.createBuffer(),ib=gl.createBuffer();
+   gl.bindBuffer(gl.ARRAY_BUFFER,vb);
+   gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data.verts),gl.STATIC_DRAW);
+   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);
+   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(data.indices),gl.STATIC_DRAW);
+   out.push({id:data.id,vb,ib,verts:data.verts,points:data.points,indices:data.indices,
+    count:data.indices.length,center:data.min.map((v,i)=>(v+data.max[i])/2)});
+  }
+  detailedMeshes=out;activeMeshes=detailedMeshes;useDetailed=true;
+  label.textContent='Anatomical MakeHuman model ready';
+  view(focusRegion,false);
+  bridge(JSON.stringify({type:'anatomyLoaded',meshes:out.length,faces:faces.length}));
+ }catch(e){
+  activeMeshes=proxyMeshes;useDetailed=false;
+  notify('Detailed anatomy unavailable: '+e.message);
+ }
+};
+window.setAnatomyMode=function(value){
+ useDetailed=value==='detailed'&&detailedMeshes!==null;
+ activeMeshes=useDetailed?detailedMeshes:proxyMeshes;
+ view(focusRegion,false);
+};
 const regions={
 full:null,head:'head',chest:'torso',back:'torso',abdomen:'torso',pelvis:'pelvis',
 leftUpperArm:'leftUpperArm',rightUpperArm:'rightUpperArm',
@@ -137,7 +242,7 @@ leftThigh:'leftThigh',rightThigh:'rightThigh',
 leftCalf:'leftCalf',rightCalf:'rightCalf',
 leftHand:'leftHand',rightHand:'rightHand',leftFoot:'leftFoot',rightFoot:'rightFoot'
 };
-const meshBy=id=>meshes.find(m=>m.id===id);
+const meshBy=id=>activeMeshes.find(m=>m.id===id);
 
 let focusRegion='full',mode='orbit';
 let yaw=.22,pitch=.03,distance=10.7,focus=[0,0,0],targetDistance=10.7,targetFocus=[0,0,0];
@@ -289,7 +394,7 @@ function pick(clientX,clientY){
 const box=canvas.getBoundingClientRect();
 const x=(clientX-box.left)*canvas.width/box.width,y=(clientY-box.top)*canvas.height/box.height;
 let best=null,bestDepth=Infinity;
-for(const mesh of meshes){
+for(const mesh of activeMeshes){
 const allow=focusRegion==='full'||regions[focusRegion]===mesh.id;
 if(!allow)continue;
 const projectedVertices=mesh.points.map(projected);
