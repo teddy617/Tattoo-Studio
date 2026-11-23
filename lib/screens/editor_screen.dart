@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -11,6 +12,8 @@ import 'package:share_plus/share_plus.dart';
 import '../models/design_project.dart';
 import '../services/project_repository.dart';
 import '../services/smart_extract.dart';
+import '../services/mask_engine.dart';
+import 'eraser_screen.dart';
 import 'import_screen.dart';
 
 enum _ImportMode { smartCrop, splitSheet, unchanged }
@@ -29,6 +32,7 @@ class _EditorScreenState extends State<EditorScreen> {
   final GlobalKey _artboardKey = GlobalKey();
   final ImagePicker _picker = ImagePicker();
   final Map<String, Uint8List> _images = {};
+  final Map<String, Future<Uint8List>> _maskRenders = {};
   final List<List<DesignLayer>> _undo = [];
   final List<List<DesignLayer>> _redo = [];
 
@@ -231,6 +235,7 @@ class _EditorScreenState extends State<EditorScreen> {
       height: original.height,
       rotation: original.rotation,
       flipX: original.flipX,
+      maskStrokes: List.of(original.maskStrokes),
     );
     _change(() {
       _project.layers.add(duplicate);
