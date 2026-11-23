@@ -16,6 +16,7 @@ import '../services/smart_extract.dart';
 import '../services/mask_engine.dart';
 import 'eraser_screen.dart';
 import 'import_screen.dart';
+import 'stencil_screen.dart';
 
 enum _ImportMode { smartCrop, splitSheet, unchanged }
 
@@ -44,6 +45,7 @@ class _EditorScreenState extends State<EditorScreen> {
   Offset _gestureDrag = Offset.zero;
   double _boardScale = 1;
   bool _busy = false;
+  bool _transparentArtboard = false;
   bool _navigationMode = false;
   bool _showGuides = true;
   bool _nearVerticalGuide = false;
@@ -436,34 +438,48 @@ class _EditorScreenState extends State<EditorScreen> {
     _persist();
   }
 
-  Future<void> _exportPng() async {
-    if (_busy) return;
-    final previousSelection = _selectedId;
+  Future<Uint8List> _captureArtboard({bool transparent = false}) async {
+    final selected = _selectedId;
+    setState(() {
+      _busy = true;
+      _selectedId = null;
+      _transparentArtboard = transparent;
+    });
     try {
-      setState(() {
-        _busy = true;
-        _selectedId = null;
-      });
-      // Wait for all non-destructive masks before capturing the PNG.
-      await Future.wait(
-        _project.layers
-            .where((layer) =>
-                layer.maskStrokes.isNotEmpty &&
-                _images.containsKey(layer.assetPath))
-            .map((layer) => _maskedBytes(layer, _images[layer.assetPath]!)),
-      );
-      if (!mounted) return;
+      await Future.wait(_project.layers
+          .where((layer) => layer.maskStrokes.isNotEmpty &&
+              _images.containsKey(layer.assetPath))
+          .map((layer) => _maskedBytes(layer, _images[layer.assetPath]!)));
+      if (!mounted) throw StateError('Editor closed during capture');
       setState(() {});
       await WidgetsBinding.instance.endOfFrame;
       final boundary = _artboardKey.currentContext?.findRenderObject();
       if (boundary is! RenderRepaintBoundary) {
-        throw StateError('Canvas is not ready.');
+        throw StateError('Canvas is not ready');
       }
-      final rendered = await boundary.toImage(pixelRatio: 2);
-      final data = await rendered.toByteData(format: ui.ImageByteFormat.png);
-      rendered.dispose();
-      if (data == null) throw StateError('Could not export canvas.');
-      final png = data.buffer.asUint8List();
+      final image = await boundary.toImage(pixelRatio: 2);
+      try {
+        final data = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (data == null) throw StateError('Unable to encode PNG');
+        return data.buffer.asUint8List();
+      } finally {
+        image.dispose();
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _selectedId = selected;
+          _transparentArtboard = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _exportPng({bool transparent = false}) async {
+    if (_busy) return;
+    try {
+      final png = await _captureArtboard(transparent: transparent);
       final file = await _repository.writeExport(_project.id, png);
       await SharePlus.instance.share(ShareParams(
         files: [XFile(file.path)],
@@ -471,13 +487,22 @@ class _EditorScreenState extends State<EditorScreen> {
       ));
     } catch (error) {
       if (mounted) _toast('Export failed: $error');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _busy = false;
-          _selectedId = previousSelection;
-        });
-      }
+    }
+  }
+
+  Future<void> _openStencil() async {
+    if (_busy) return;
+    try {
+      final png = await _captureArtboard(transparent: true);
+      if (!mounted) return;
+      await Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => StencilScreen(
+          compositePng: png,
+          projectId: _project.id,
+        ),
+      ));
+    } catch (error) {
+      if (mounted) _toast('Stencil preview failed: $error');
     }
   }
 
@@ -658,7 +683,7 @@ class _EditorScreenState extends State<EditorScreen> {
                   RepaintBoundary(
                     key: _artboardKey,
                     child: Container(
-                      color: Colors.white,
+                      color: _transparentArtboard ? Colors.transparent : Colors.white,
                       child: Stack(
                         clipBehavior: Clip.hardEdge,
                         children: [
@@ -719,10 +744,27 @@ class _EditorScreenState extends State<EditorScreen> {
             onPressed: _redo.isNotEmpty ? _redoAction : null,
             icon: const Icon(Icons.redo),
           ),
-          IconButton(
-            tooltip: 'Export PNG',
-            onPressed: _busy ? null : _exportPng,
+          PopupMenuButton<String>(
+            tooltip: 'Export and stencil',
+            enabled: !_busy,
             icon: const Icon(Icons.ios_share_outlined),
+            onSelected: (value) {
+              if (value == 'white') {
+                _exportPng();
+              } else if (value == 'transparent') {
+                _exportPng(transparent: true);
+              } else if (value == 'stencil') {
+                _openStencil();
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'white',
+                  child: Text('Export PNG (white)')),
+              PopupMenuItem(value: 'transparent',
+                  child: Text('Export PNG (transparent)')),
+              PopupMenuItem(value: 'stencil',
+                  child: Text('Stencil preparation')),
+            ],
           ),
         ],
       ),
