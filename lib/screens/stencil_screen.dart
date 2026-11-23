@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../services/project_repository.dart';
 import '../services/stencil_processor.dart';
+import '../services/print_export.dart';
 
 /// Produces a preview/export from the current composition without modifying
 /// any saved layers. The canvas capture is supplied by EditorScreen.
@@ -13,10 +14,12 @@ class StencilScreen extends StatefulWidget {
     super.key,
     required this.compositePng,
     required this.projectId,
+    required this.dpi,
   });
 
   final Uint8List compositePng;
   final String projectId;
+  final int dpi;
 
   @override
   State<StencilScreen> createState() => _StencilScreenState();
@@ -66,10 +69,11 @@ class _StencilScreenState extends State<StencilScreen> {
     if (_busy || result == null) return;
     setState(() => _busy = true);
     try {
-      final file = await _repository.writeExport(widget.projectId, result);
+      final sized = PrintExport.setDpi(result, widget.dpi);
+      final file = await _repository.writeExport(widget.projectId, sized);
       await SharePlus.instance.share(ShareParams(
         files: [XFile(file.path)],
-        text: 'Tattoo Studio stencil preview — verify sizing before printing',
+        text: 'Tattoo Studio stencil — ' + widget.dpi.toString() + ' DPI; print at 100% and verify size',
       ));
     } catch (error) {
       if (mounted) {
