@@ -43,10 +43,16 @@ class _PlacementScreenState extends State<PlacementScreen> {
         },
       )
       ..setNavigationDelegate(NavigationDelegate(
-        onNavigationRequest: (request) => request.url.startsWith('https:') ||
-                request.url.startsWith('http:')
-            ? NavigationDecision.prevent
-            : NavigationDecision.navigate,
+        onNavigationRequest: (request) {
+          final uri = Uri.tryParse(request.url);
+          if (uri?.host == 'appassets.androidplatform.net') {
+            return NavigationDecision.navigate;
+          }
+          if (uri?.scheme == 'http' || uri?.scheme == 'https') {
+            return NavigationDecision.prevent;
+          }
+          return NavigationDecision.navigate;
+        },
         onWebResourceError: (error) {
           if (mounted) setState(() => _error = error.description);
         },
