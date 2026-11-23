@@ -6,6 +6,7 @@ import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../services/placement_repository.dart';
@@ -58,6 +59,8 @@ class _PlacementScreenState extends State<PlacementScreen> {
   };
   String? _error;
   bool _restoring = false;
+  bool _detailedAnatomy = true;
+  bool _anatomyLoaded = false;
   String _activeTattooId = 'current';
   List<Map<String, dynamic>> _tattoos = [
     {'id': 'current', 'name': 'Current design'},
@@ -88,7 +91,9 @@ class _PlacementScreenState extends State<PlacementScreen> {
           } else if (message.message.startsWith('{')) {
             try {
               final data = jsonDecode(message.message) as Map<String, dynamic>;
-              if (data['type'] == 'state') {
+              if (data['type'] == 'anatomyLoaded') {
+                if (mounted) setState(() => _anatomyLoaded = true);
+              } else if (data['type'] == 'state') {
                 _tattooStates = (data['tattoos'] as List<dynamic>? ?? [])
                     .whereType<Map<String, dynamic>>()
                     .toList();
@@ -183,6 +188,9 @@ class _PlacementScreenState extends State<PlacementScreen> {
           debugPrint('Placement image could not load: $error');
         }
       }
+      // Assets cannot be fetched reliably as module subresources from Android
+      // WebView. Transfer a bounded text chunk through the Flutter bridge.
+      await _loadAnatomy();
       if (saved != null) {
         _tattooStates = (saved['tattoos'] as List<dynamic>? ?? [])
             .whereType<Map<String, dynamic>>()
@@ -199,6 +207,27 @@ class _PlacementScreenState extends State<PlacementScreen> {
       if (mounted) setState(() => _error = 'Placement loading failed: $error');
     } finally {
       _restoring = false;
+    }
+  }
+
+  Future<void> _loadAnatomy() async {
+    if (!_detailedAnatomy || !mounted) return;
+    try {
+      final obj = await rootBundle.loadString(
+        'assets/placement/models/makehuman_cc0.obj',
+      );
+      const size = 45000;
+      for (var i = 0; i < obj.length; i += size) {
+        if (!mounted) return;
+        final end = (i + size < obj.length) ? i + size : obj.length;
+        await _controller.runJavaScript('appendAnatomy(' +
+            jsonEncode(obj.substring(i, end)) + ')');
+      }
+      if (!mounted) return;
+      await _controller.runJavaScript('finishAnatomy()');
+    } catch (error) {
+      debugPrint('Detailed anatomical model unavailable: $error');
+      if (mounted) setState(() => _detailedAnatomy = false);
     }
   }
 
@@ -356,6 +385,24 @@ class _PlacementScreenState extends State<PlacementScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: Column(children: [
+              Row(children: [
+                const Text('Model  '),
+                Expanded(
+                  child: SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment(value: true, label: Text('Anatomical')),
+                      ButtonSegment(value: false, label: Text('Basic')),
+                    ],
+                    selected: {_detailedAnatomy},
+                    onSelectionChanged: (values) {
+                      setState(() => _detailedAnatomy = values.first);
+                      _controller.runJavaScript('setAnatomyMode(' +
+                          jsonEncode(_detailedAnatomy
+                              ? 'detailed' : 'basic') + ')');
+                    },
+                  ),
+                ),
+              ]),
               Row(children: [
                 Expanded(child: SegmentedButton<bool>(
                   segments: const [
