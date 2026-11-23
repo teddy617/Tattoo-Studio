@@ -549,22 +549,46 @@ class _EditorScreenState extends State<EditorScreen> {
     return Container(
       color: const Color(0xFFE9E9E6),
       padding: const EdgeInsets.all(12),
-      child: SizedBox.expand(
-        child: FittedBox(
-          fit: BoxFit.contain,
-          child: SizedBox(
-            width: canvasWidth,
-            height: canvasHeight,
-            child: RepaintBoundary(
-              key: _artboardKey,
-              child: Container(
-                color: Colors.white,
-                child: Stack(
-                  clipBehavior: Clip.hardEdge,
-                  children: [
-                    for (final layer in _project.layers) _buildLayer(layer),
-                  ],
-                ),
+      child: InteractiveViewer(
+        transformationController: _viewTransform,
+        panEnabled: _navigationMode,
+        scaleEnabled: _navigationMode,
+        minScale: 1,
+        maxScale: 8,
+        child: SizedBox.expand(
+          child: FittedBox(
+            fit: BoxFit.contain,
+            child: SizedBox(
+              width: canvasWidth,
+              height: canvasHeight,
+              child: Stack(
+                children: [
+                  RepaintBoundary(
+                    key: _artboardKey,
+                    child: Container(
+                      color: Colors.white,
+                      child: Stack(
+                        clipBehavior: Clip.hardEdge,
+                        children: [
+                          for (final layer in _project.layers)
+                            _buildLayer(layer),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (_showGuides &&
+                      (_nearVerticalGuide || _nearHorizontalGuide))
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: CustomPaint(
+                          painter: _AlignmentGuidePainter(
+                            vertical: _nearVerticalGuide,
+                            horizontal: _nearHorizontalGuide,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
@@ -661,6 +685,48 @@ class _EditorScreenState extends State<EditorScreen> {
               ),
             ),
           ),
+          Material(
+            color: Theme.of(context).colorScheme.surface,
+            child: Row(
+              children: [
+                const SizedBox(width: 8),
+                SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(
+                      value: false,
+                      icon: Icon(Icons.open_with),
+                      label: Text('Edit'),
+                    ),
+                    ButtonSegment(
+                      value: true,
+                      icon: Icon(Icons.pan_tool_outlined),
+                      label: Text('Navigate'),
+                    ),
+                  ],
+                  selected: {_navigationMode},
+                  onSelectionChanged: (values) => setState(() {
+                    _navigationMode = values.first;
+                    _nearVerticalGuide = false;
+                    _nearHorizontalGuide = false;
+                  }),
+                ),
+                IconButton(
+                  tooltip: 'Reset zoom',
+                  onPressed: () => _viewTransform.value = Matrix4.identity(),
+                  icon: const Icon(Icons.center_focus_strong),
+                ),
+                IconButton(
+                  tooltip: _showGuides ? 'Disable guides' : 'Enable guides',
+                  onPressed: () => setState(() {
+                    _showGuides = !_showGuides;
+                    _nearVerticalGuide = false;
+                    _nearHorizontalGuide = false;
+                  }),
+                  icon: Icon(_showGuides ? Icons.grid_on : Icons.grid_off),
+                ),
+              ],
+            ),
+          ),
           if (_busy) const LinearProgressIndicator(minHeight: 2),
           Expanded(child: LayoutBuilder(builder: (context, c) => _buildCanvas(c))),
           Material(
@@ -729,4 +795,31 @@ class _EditorScreenState extends State<EditorScreen> {
           ],
         ),
       );
+}
+
+class _AlignmentGuidePainter extends CustomPainter {
+  const _AlignmentGuidePainter({required this.vertical, required this.horizontal});
+  final bool vertical;
+  final bool horizontal;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final pen = Paint()
+      ..color = const Color(0xFF008DB8)
+      ..strokeWidth = 2;
+    if (vertical) {
+      canvas.drawLine(
+        Offset(size.width / 2, 0),
+        Offset(size.width / 2, size.height), pen);
+    }
+    if (horizontal) {
+      canvas.drawLine(
+        Offset(0, size.height / 2),
+        Offset(size.width, size.height / 2), pen);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _AlignmentGuidePainter old) =>
+      vertical != old.vertical || horizontal != old.horizontal;
 }
