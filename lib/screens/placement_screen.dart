@@ -382,9 +382,12 @@ class _PlacementScreenState extends State<PlacementScreen> {
                 ),
             ]),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            child: Column(children: [
+          SizedBox(
+            height: 350,
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: Column(children: [
               Row(children: [
                 const Text('Model  '),
                 Expanded(
@@ -514,7 +517,9 @@ class _PlacementScreenState extends State<PlacementScreen> {
                 style: TextStyle(fontSize: 11),
                 textAlign: TextAlign.center,
               ),
-            ]),
+                ]),
+              ),
+            ),
           ),
         ]),
       ),
