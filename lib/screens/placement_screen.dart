@@ -6,7 +6,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../services/placement_repository.dart';
 
-/// v0.8 proof of concept: a bundled, completely offline WebGL limb viewer.
+/// Offline WebGL placement studio using a procedural full-body mannequin.
 /// The tattoo image comes from the current project composition.
 class PlacementScreen extends StatefulWidget {
   const PlacementScreen({
@@ -27,6 +27,27 @@ class _PlacementScreenState extends State<PlacementScreen> {
   double _rotation = 0;
   double _depth = 0.6;
   bool _placeMode = false;
+  String _viewPart = 'full';
+  static const Map<String, String> _regions = {
+    'full': 'Full body',
+    'head': 'Head',
+    'chest': 'Chest',
+    'back': 'Upper back',
+    'abdomen': 'Abdomen',
+    'pelvis': 'Hips',
+    'leftUpperArm': 'Left upper arm',
+    'rightUpperArm': 'Right upper arm',
+    'leftForearm': 'Left forearm',
+    'rightForearm': 'Right forearm',
+    'leftHand': 'Left hand',
+    'rightHand': 'Right hand',
+    'leftThigh': 'Left thigh',
+    'rightThigh': 'Right thigh',
+    'leftCalf': 'Left calf',
+    'rightCalf': 'Right calf',
+    'leftFoot': 'Left foot',
+    'rightFoot': 'Right foot',
+  };
   String? _error;
   final PlacementRepository _repository = PlacementRepository();
   Map<String, dynamic> _anchor = {};
@@ -55,7 +76,15 @@ class _PlacementScreenState extends State<PlacementScreen> {
                 _anchor = {
                   'point': data['point'],
                   'normal': data['normal'],
+                  'bodyPart': data['bodyPart'],
+                  'viewPart': data['viewPart'],
+                  'centerU': data['centerU'],
+                  'centerV': data['centerV'],
                 };
+                if (data['viewPart'] is String &&
+                    _regions.containsKey(data['viewPart'])) {
+                  setState(() => _viewPart = data['viewPart'] as String);
+                }
                 _saveState();
               }
             } catch (_) { /* Ignore malformed WebView messages. */ }
@@ -87,7 +116,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
           }
         },
       ))
-      ..loadFlutterAsset('assets/placement/viewer.html');
+      ..loadFlutterAsset('assets/placement/full_body.html');
   }
 
   Future<void> _restoreState() async {
@@ -102,7 +131,14 @@ class _PlacementScreenState extends State<PlacementScreen> {
     _anchor = {
       if (saved['point'] is List) 'point': saved['point'],
       if (saved['normal'] is List) 'normal': saved['normal'],
+      if (saved['bodyPart'] is String) 'bodyPart': saved['bodyPart'],
+      if (saved['centerU'] is num) 'centerU': saved['centerU'],
+      if (saved['centerV'] is num) 'centerV': saved['centerV'],
     };
+    if (saved['viewPart'] is String &&
+        _regions.containsKey(saved['viewPart'])) {
+      setState(() => _viewPart = saved['viewPart'] as String);
+    }
     await _controller.runJavaScript('restorePlacement('
         + jsonEncode(jsonEncode({...saved, ..._anchor})) + ')');
   }
@@ -114,6 +150,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
       'rotation': _rotation,
       'depth': _depth,
       ..._anchor,
+      'viewPart': _viewPart,
     };
     _saveChain = _saveChain.then(
       (_) => _repository.write(widget.projectId, snapshot),
@@ -143,7 +180,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('3D Placement — prototype')),
+      appBar: AppBar(title: const Text('3D Placement Studio')),
       body: SafeArea(
         child: Column(children: [
           Expanded(
@@ -167,7 +204,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
                           onPressed: () {
                             setState(() => _error = null);
                             _controller.loadFlutterAsset(
-                              'assets/placement/viewer.html',
+                              'assets/placement/full_body.html',
                             );
                           },
                           child: const Text('Retry 3D viewer'),
@@ -194,6 +231,31 @@ class _PlacementScreenState extends State<PlacementScreen> {
                   },
                 )),
               ]),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                child: Row(children: [
+                  const Text('View  '),
+                  Expanded(
+                    child: DropdownButton<String>(
+                      value: _viewPart,
+                      isExpanded: true,
+                      items: _regions.entries
+                          .map((entry) => DropdownMenuItem<String>(
+                                value: entry.key,
+                                child: Text(entry.value),
+                              ))
+                          .toList(),
+                      onChanged: !_ready ? null : (value) {
+                        if (value == null) return;
+                        setState(() => _viewPart = value);
+                        _controller.runJavaScript('selectPart(' +
+                            jsonEncode(value) + ')');
+                        _saveState();
+                      },
+                    ),
+                  ),
+                ]),
+              ),
               Row(children: [
                 Expanded(
                   child: FilledButton.tonalIcon(
@@ -223,8 +285,8 @@ class _PlacementScreenState extends State<PlacementScreen> {
               _slider('Opacity', _opacity, 0, 1, (v) => _opacity = v),
               _slider('Wrap depth', _depth, .15, 1.2, (v) => _depth = v),
               const Text(
-                'Prototype mannequin, not your anatomy. Orbit to rotate or '
-                'Place to tap the limb. Placement saves automatically.',
+                'Illustrative mannequin, not exact anatomy. Choose Full body '
+                'or a region; drag in Place mode to move ink along the surface.',
                 style: TextStyle(fontSize: 11),
                 textAlign: TextAlign.center,
               ),
