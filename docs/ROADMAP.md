@@ -72,3 +72,12 @@
 - [x] Add a test excluding a screenshot header from the manually selected region.
 - [ ] Validate the GitHub Actions build and actual Android output.
 - No semantic AI segmentation: close/touching motifs may still merge; intricate backgrounds may need manual selection.
+
+## v0.4.0 — reversible erase tool
+- [x] Dedicated touch eraser for selected, unlocked image layer.
+- [x] Adjustable round brush, undo last stroke, and Restore all.
+- [x] Preserve the original layer bitmap; save reversible mask strokes in project JSON.
+- [x] Regenerate masked layers on reopen, undo/redo, duplicate and PNG export.
+- [x] Unit tests for mask rendering and project compatibility.
+- [ ] Verify Flutter compilation, Android device behavior, and build workflow.
+- This is a raster eraser, not a vector-editing or smart object-removal tool.
