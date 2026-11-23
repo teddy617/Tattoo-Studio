@@ -25,5 +25,3 @@ flutter:
   assets:
     - assets/placement/full_body.html
     - assets/placement/viewer.html
-    - assets/placement/viewer.js
-    - assets/placement/vendor/
