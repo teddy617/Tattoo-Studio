@@ -119,9 +119,11 @@
 ## v0.8 — planned 3D tattoo placement prototype
 - [x] Approve separate, offline 3D Placement Studio architecture (Flutter + bundled Three.js WebView).
 - [x] Define proof-of-concept stages and acceptance criteria in [3D_PLACEMENT_PLAN.md](3D_PLACEMENT_PLAN.md).
-- [ ] Render a rotatable forearm proxy in an offline WebView.
-- [ ] Project the current tattoo as a surface-conforming decal, not a flat screen overlay.
-- [ ] Add orbit/place modes, scale, rotate, opacity and projection-depth controls.
-- [ ] Persist placement independently from design layers, test Android device performance.
+- [x] Add offline turnable forearm proxy and bundled Three.js renderer source (Android behavior unverified).
+- [x] Implement mesh-conforming decal projection in Three.js (requires on-device visual verification).
+- [x] Add Orbit/Place modes, tap-to-anchor, scale, rotation, opacity and projection-depth controls.
+- [x] Add per-project placement autosave/reload independent from design layers.
+- [ ] Compile and validate on a physical Android device, including WebGL import-map/module loading, texture upload, gestures and projected decal wrap.
 - [ ] Expand anatomy only after surface-wrapping proof passes.
-- Version remains v0.7 until working v0.8 source implementation is ready and tested.
+- Version remains v0.7 until the v0.8 build and actual 3D placement behavior are verified.
+- The procedural forearm is illustrative only. No anatomical accuracy, full-body rig, custom contour painting, or calibrated tattoo dimensions yet.
