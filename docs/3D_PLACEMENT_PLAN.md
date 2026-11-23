@@ -1,6 +1,6 @@
 # Tattoo Studio — 3D Placement Studio development plan
 
-Status: approved direction, **planning only**. Current application remains v0.7.0.
+Status: implementation underway. User verified the offline forearm viewer on Android (2026-11-23); v0.8.1 full-body prototype awaits device verification.
 Priority: prove that a transparent tattoo image conforms to a rotating 3D limb, rather than floating as a flat image over the screen.
 
 ## Product requirements
@@ -16,11 +16,11 @@ Priority: prove that a transparent tattoo image conforms to a rotating 3D limb, 
 
 ## Architecture decision
 
-Flutter remains the native application shell and saves project data. A bundled offline Three.js/WebGL viewer renders the 3D placement scene in a Flutter WebView. This has a smaller initial integration surface than embedding Unity.
+Flutter remains the native application shell and saves project data. The *current implementation* uses a bundled standalone WebGL viewer in a Flutter WebView, after Android failed to load an ES-module-based Three.js viewer. Three.js remains a possible future engine for realistic GLB meshes, but is **not** used by the current running viewer.
 
 - Flutter: project identity, PNG extraction, size values, navigation, persistence, export and error states.
 - WebView bridge: versioned JSON messages with allowlisted methods. JS receives the body-part selection, PNG texture bytes (or isolated local resource), and placement state; it returns updates and selection events. No internet or arbitrary URL navigation required.
-- Three.js: static GLB model loading, orbit camera, raycast selection, local tangent frame, projected decal geometry, mesh/textures and lighting.
+- Current WebGL viewer: procedural segmented meshes, pointer orbit, triangle-based surface picking and UV-conforming alpha tattoo textures. Future Three.js or another renderer: licensed GLB model loading, anatomical deformation and cross-mesh projection.
 - Assets: package optimised, properly licensed **static** GLB geometry locally. Do not ship an unverified third-party anatomy model. A simple procedural cylinder/limb proxy is enough for the initial projection test.
 - Persist JSON to the existing local project directory; design source and original layer assets remain untouched.
 - Keep renderer implementation behind a placement adapter for a future native renderer migration if Android WebView performance proves inadequate.
@@ -115,3 +115,14 @@ Store placement in model-local coordinates and include modelVersion so transform
 5. Only then expand body parts, realism and contour controls.
 
 No full-body model, photo overlay, body-scan capture, cloud service or paid API in the v0.8 scope.
+
+## Implemented extension — v0.8.1 full-body (verification pending)
+
+- Whole mannequin with simplified head, torso, hips, arms, hands, thighs, calves and feet.
+- Switch among whole-body view or individual body regions; choose front/back torso.
+- Tap and drag ink along a selected surface using barycentric interpolation, with smoothed UV motion.
+- Per-project placement JSON includes selected body region, view region and UV position.
+- No external CDN, imports or third-party anatomical assets; a self-contained WebGL file remains the proven compatibility baseline.
+- Android test next: verify whole-body visibility, camera zoom, rotation, placement transitions, persistence, and frame rate.
+
+**Limitations:** Stylized mannequin geometry; artwork cannot yet traverse body-part boundaries. Current UV mapping can stretch near steep curves. Better anatomical fidelity, true multi-mesh projection, posing and calibration remain later milestones.
