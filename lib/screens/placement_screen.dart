@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
-import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 
 import 'package:flutter/material.dart';
@@ -11,6 +10,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../services/placement_repository.dart';
 import '../services/project_repository.dart';
+import '../services/placement_image.dart';
 import '../models/design_project.dart';
 
 /// Offline WebGL placement studio using a procedural full-body mannequin.
@@ -276,7 +276,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
       return;
     }
     try {
-      final bytes = await compute(_prepareTattooTexture, data);
+      final bytes = await compute(prepareTattooTexture, data);
       final id = makeId();
       final path = await _projectRepository.writeLayerAsset(
         widget.projectId, id, bytes,
@@ -574,16 +574,3 @@ class _PlacementScreenState extends State<PlacementScreen> {
   }
 }
 
-
-/// Reduce image sizes to avoid mobile GPU texture exhaustion.
-Uint8List _prepareTattooTexture(Uint8List bytes) {
-  final original = img.decodeImage(bytes);
-  if (original == null) throw const FormatException('Unsupported image');
-  final oriented = img.bakeOrientation(original);
-  final resized = oriented.width > 1200 || oriented.height > 1200
-      ? img.copyResize(oriented,
-          width: oriented.width >= oriented.height ? 1200 : null,
-          height: oriented.height > oriented.width ? 1200 : null)
-      : oriented;
-  return Uint8List.fromList(img.encodePng(resized));
-}
