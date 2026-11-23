@@ -21,7 +21,7 @@ const skin=[.71,.51,.44];
 const VS=[
 'attribute vec3 aPos;attribute vec3 aNormal;attribute vec2 aUV;',
 'uniform vec3 uFocus;uniform float uYaw,uPitch,uDistance,uAspect;',
-'varying vec3 vNormal,vWorld;varying vec2 vUV;',
+'varying vec3 vNormal,vWorld,vSurfaceNormal;varying vec2 vUV;',
 'void main(){',
 'float c=cos(uYaw),s=sin(uYaw),cp=cos(uPitch),sp=sin(uPitch);',
 'vec3 p=aPos-uFocus;',
@@ -31,12 +31,12 @@ const VS=[
 'vNormal=normalize(vec3(n.x,cp*n.y-sp*n.z,sp*n.y+cp*n.z));',
 'float z=max(.1,uDistance-r.z);',
 'gl_Position=vec4(2.65*r.x/(uAspect*z),2.65*r.y/z,(z-2.0)/12.0,1.0);',
-'vUV=aUV;vWorld=aPos;',
+'vUV=aUV;vWorld=aPos;vSurfaceNormal=normalize(aNormal);',
 '}'
 ].join('\n');
 const FS=[
 'precision mediump float;',
-'varying vec3 vNormal,vWorld;varying vec2 vUV;',
+'varying vec3 vNormal,vWorld,vSurfaceNormal;varying vec2 vUV;',
 'uniform vec3 uSkin,uAnchor,uNormal,uRight,uUp;',
 'uniform sampler2D uInk;',
 'uniform float uInkEnabled,uOpacity,uWidth,uAngle,uWrap,uCenterU,uCenterV,uImageRatio,uSelected,uPass;',
@@ -52,7 +52,7 @@ const FS=[
 'float height=max(.01,width*uImageRatio);',
 'float depth=abs(dot(relative,uNormal));',
 'if(depth>mix(.025,.52,clamp(uWrap/1.2,0.,1.)))discard;',
-'if(dot(normalize(vNormal),uNormal)<mix(.68,-.20,clamp(uWrap/1.2,0.,1.)))discard;',
+'if(dot(normalize(vSurfaceNormal),uNormal)<mix(.68,-.20,clamp(uWrap/1.2,0.,1.)))discard;',
 'vec2 p=vec2(dot(relative,uRight)/width,dot(relative,uUp)/height);',
 'float c=cos(uAngle),s=sin(uAngle);',
 'p=vec2(c*p.x-s*p.y,s*p.x+c*p.y)+.5;',
