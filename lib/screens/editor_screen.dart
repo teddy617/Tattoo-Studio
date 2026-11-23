@@ -508,9 +508,17 @@ class _EditorScreenState extends State<EditorScreen> {
     if (_busy) return;
     try {
       final png = await _captureArtboard(transparent: true);
+      final preview = await PrintExport.prepare(
+        png,
+        const PrintOptions(
+          widthInches: 2,
+          dpi: 150,
+          transparent: true,
+        ),
+      );
       if (!mounted) return;
       await Navigator.of(context).push<void>(MaterialPageRoute(
-        builder: (_) => PlacementScreen(artworkPng: png),
+        builder: (_) => PlacementScreen(artworkPng: preview),
       ));
     } catch (error) {
       if (mounted) _toast('3D preview failed: ' + error.toString());
