@@ -420,7 +420,15 @@ let best=null,bestDepth=Infinity;
 for(const mesh of activeMeshes){
 const allow=focusRegion==='full'||regions[focusRegion]===mesh.id;
 if(!allow)continue;
-const projectedVertices=mesh.points.map(projected);
+// Reuse projected vertices while the camera is steady, avoiding large
+// per-touch allocations for the detailed 19k-vertex anatomy.
+const cameraKey=[yaw,pitch,distance,...focus,canvas.width,canvas.height]
+  .map(v=>Math.round(v*100)).join(':');
+if(mesh.pickCameraKey!==cameraKey){
+ mesh.pickCameraKey=cameraKey;
+ mesh.pickProjection=mesh.points.map(projected);
+}
+const projectedVertices=mesh.pickProjection;
 for(let t=0;t<mesh.indices.length;t+=3){
 const ia=mesh.indices[t],ib=mesh.indices[t+1],ic=mesh.indices[t+2];
 const a=projectedVertices[ia],b=projectedVertices[ib],c=projectedVertices[ic];
@@ -474,7 +482,7 @@ lastPinch=d;pinching=true;return;
 const dx=e.clientX-prev.x,dy=e.clientY-prev.y;
 if(mode==='orbit'){
 yaw+=dx*.009;pitch=clamp(pitch+dy*.006,-1.25,1.25);
-}else if(performance.now()-lastPick>35){
+}else if(performance.now()-lastPick>(activeMeshes===detailedMeshes?85:35)){
   if(pick(e.clientX,e.clientY)&&performance.now()-lastSave>120){
     save();lastSave=performance.now();
   }
