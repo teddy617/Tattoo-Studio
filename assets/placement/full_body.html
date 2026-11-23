@@ -468,7 +468,7 @@ let active=new Map(),pinching=false,lastPinch=0,lastSave=0,lastPick=0;
 canvas.addEventListener('pointerdown',e=>{
 canvas.setPointerCapture(e.pointerId);
 active.set(e.pointerId,{x:e.clientX,y:e.clientY});
-lastX=e.clientX;lastY=e.clientY;
+// Pointer positions are kept in the active pointer map.
 });
 canvas.addEventListener('pointermove',e=>{
 if(!active.has(e.pointerId))return;
