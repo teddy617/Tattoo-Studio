@@ -483,7 +483,21 @@ class _EditorScreenState extends State<EditorScreen> {
             child: Transform(
               alignment: Alignment.center,
               transform: Matrix4.diagonal3Values(layer.flipX ? -1 : 1, 1, 1),
-              child: Image.memory(bytes, fit: BoxFit.fill, gaplessPlayback: true),
+              child: layer.maskStrokes.isEmpty
+                  ? Image.memory(bytes, fit: BoxFit.fill, gaplessPlayback: true)
+                  : FutureBuilder<Uint8List>(
+                      future: _maskedBytes(layer, bytes),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          return Image.memory(bytes, fit: BoxFit.fill);
+                        }
+                        if (!snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return Image.memory(snapshot.data!,
+                            fit: BoxFit.fill, gaplessPlayback: true);
+                      },
+                    ),
             ),
           ),
         ),
@@ -645,6 +659,8 @@ class _EditorScreenState extends State<EditorScreen> {
                                     : () => _editSelected((layer) => layer.copyWith(
                                           flipX: !layer.flipX,
                                         ))),
+                            _tool(Icons.auto_fix_off, 'Erase',
+                                selected.locked ? null : _eraseSelected),
                             _tool(Icons.content_copy, 'Duplicate', _duplicate),
                             _tool(Icons.vertical_align_top, 'Forward',
                                 () => _moveSelected(1)),
