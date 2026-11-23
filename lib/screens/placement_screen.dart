@@ -558,7 +558,6 @@ class _PlacementScreenState extends State<PlacementScreen> {
                 SizedBox(width: 64,
                   child: Text('${_widthCm.toStringAsFixed(1)} cm')),
               ]),
-              _slider('Size', _size, .15, 1.5, (v) => _size = v),
               _slider('Rotation', _rotation, -180, 180, (v) => _rotation = v),
               _slider('Opacity', _opacity, 0, 1, (v) => _opacity = v),
               _slider('Wrap depth', _depth, .15, 1.2, (v) => _depth = v),
