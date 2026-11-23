@@ -175,3 +175,12 @@
 - [ ] Calibrate physical dimensions to the mannequin's actual height and measurements; presently assumes an illustrative 170 cm body.
 - [ ] Replace tangent-plane projection with geodesic/UV or surface-patch method for strong curvature and complex joint wraps.
 - This is *not* accurate transfer-stencil sizing: the preview width is approximate and the 2D print export remains separately calibrated.
+
+## v0.9.2 — Android 3D error and distorted anatomy corrections
+- [x] Remove undeclared `lastX` / `lastY` assignments that caused a JavaScript ReferenceError on pointer-down.
+- [x] Filter MakeHuman mesh to the main connected human skin surface (13,380 vertices; 13,378 quad faces), excluding 153 disconnected non-skin/helper components.
+- [x] Record source, CC0 provenance, filtering and face-index remapping in the model NOTICE.
+- [x] Version placement surface anchors and approximate reproject legacy anchors onto the corrected surface on reopen.
+- [x] Invalidate and reproject placement anchors when switching Detailed / Basic mesh.
+- [ ] Test latest Android build on device: smooth rotations, tattoo layer movement, detailed model appearance, saved multi-tattoo preview and old-project migration.
+- This is still a generic body mesh, with approximate surface region boundaries and tattoo widths; placement is not an anatomical scan or clinical measurement.
