@@ -587,6 +587,115 @@ if(active.size===0){pinching=false;if(mode==='place')save();}
 });
 canvas.addEventListener('pointercancel',e=>{active.delete(e.pointerId);lastPinch=0;pinching=false});
 canvas.addEventListener('wheel',e=>{e.preventDefault();targetDistance=clamp(targetDistance*(1+Math.sign(e.deltaY)*.07),2.25,15)},{passive:false});
+
+// A bounded, mesh-connected local surface chart for each tattoo.
+// Unlike a projection ray, shortest paths cannot jump across a gap in skin.
+// Charts are constructed only on demand, not every frame.
+function releaseSurfacePatch(t){
+ if(t.patch){
+  gl.deleteBuffer(t.patch.vb);
+  gl.deleteBuffer(t.patch.ib);
+ }
+ t.patch=null;
+ t.patchSignature=null;
+}
+function transportRight(right,normal){
+ const d=dot(right,normal);
+ const candidate=right.map((v,k)=>v-d*normal[k]);
+ if(Math.hypot(...candidate)>.12)return normalized(candidate);
+ const reference=Math.abs(normal[1])>.9?[0,0,1]:[0,1,0];
+ return normalized(cross(reference,normal));
+}
+function createSurfacePatch(t,width){
+ if(!skinGraph||!Array.isArray(t.anchor)||!Array.isArray(t.normal))
+  return null;
+ const {vertices,normals,faces,neighbors}=skinGraph;
+ const count=vertices.length;
+ // Limit path search to the diagonal of the intended artwork plus padding.
+ const ratio=clamp(t.imageRatio,.2,4);
+ const radius=Math.min(2.25,Math.max(.1,.63*Math.hypot(width,width*ratio)+.065));
+ let source=0,closest=Infinity;
+ for(let i=0;i<count;i++){
+  const p=vertices[i],distance=Math.hypot(...p.map((v,k)=>v-t.anchor[k]));
+  if(distance<closest){closest=distance;source=i}
+ }
+ if(closest>.18)return null;
+ const dists=new Float32Array(count);
+ dists.fill(Infinity);dists[source]=0;
+ const reached=new Uint8Array(count);
+ const uv=new Array(count),rights=new Array(count);
+ const startNormal=normals[source];
+ const initialRight=t.drawnRight||cross(
+   Math.abs(startNormal[1])>.9?[0,0,1]:[0,1,0],startNormal);
+ rights[source]=transportRight(normalized(initialRight),startNormal);
+ uv[source]=[0,0];
+ // Binary min heap: [distance, vertex].
+ const heap=[];
+ function put(value){
+  heap.push(value);
+  for(let i=heap.length-1;i>0;){
+   const parent=(i-1)>>1;
+   if(heap[parent][0]<=heap[i][0])break;
+   [heap[parent],heap[i]]=[heap[i],heap[parent]];
+   i=parent;
+  }
+ }
+ function take(){
+  const first=heap[0],last=heap.pop();
+  if(heap.length){
+   heap[0]=last;
+   for(let i=0;;){
+    let a=i*2+1,b=a+1,best=i;
+    if(a<heap.length&&heap[a][0]<heap[best][0])best=a;
+    if(b<heap.length&&heap[b][0]<heap[best][0])best=b;
+    if(best===i)break;
+    [heap[i],heap[best]]=[heap[best],heap[i]];i=best;
+   }
+  }
+  return first;
+ }
+ put([0,source]);
+ let visited=0;
+ while(heap.length){
+  const [dist,i]=take();
+  if(reached[i]||dist>radius)continue;
+  reached[i]=1;
+  if(++visited>12000)return null;
+  const n=normals[i],right=rights[i],up=normalized(cross(n,right));
+  for(const [j,len] of neighbors[i]){
+   const next=dist+len;
+   if(next>=dists[j]||next>radius)continue;
+   dists[j]=next;
+   const edge=vertices[j].map((v,k)=>v-vertices[i][k]);
+   const dx=dot(edge,right),dy=dot(edge,up);
+   const tangentLength=Math.hypot(dx,dy);
+   const factor=tangentLength>.000001?len/tangentLength:1;
+   uv[j]=[uv[i][0]+dx*factor,uv[i][1]+dy*factor];
+   rights[j]=transportRight(right,normals[j]);
+   put([next,j]);
+  }
+ }
+ const data=[],indices=[];
+ // Include full triangles only; boundary is outside the texture rectangle.
+ for(const face of faces){
+  if(!face.every(i=>reached[i]))continue;
+  if(indices.length+3>60000)return null;
+  for(const id of face){
+   const p=vertices[id],n=normals[id],coords=uv[id];
+   if(!coords)return null;
+   data.push(...p,...n,...coords);
+   indices.push(indices.length);
+  }
+ }
+ if(!indices.length)return null;
+ const vb=gl.createBuffer(),ib=gl.createBuffer();
+ gl.bindBuffer(gl.ARRAY_BUFFER,vb);
+ gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data),gl.STATIC_DRAW);
+ gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);
+ gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(indices),gl.STATIC_DRAW);
+ return {vb,ib,count:indices.length,vertices:visited};
+}
+
 function render(){
 const dpr=Math.min(devicePixelRatio||1,2),w=Math.max(1,Math.round(canvas.clientWidth*dpr)),
 h=Math.max(1,Math.round(canvas.clientHeight*dpr));
