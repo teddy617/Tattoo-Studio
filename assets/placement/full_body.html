@@ -39,7 +39,7 @@ const FS=[
 'varying vec3 vNormal,vWorld,vSurfaceNormal;varying vec2 vUV;',
 'uniform vec3 uSkin,uAnchor,uNormal,uRight,uUp;',
 'uniform sampler2D uInk;',
-'uniform float uInkEnabled,uOpacity,uWidth,uAngle,uWrap,uCenterU,uCenterV,uImageRatio,uSelected,uPass,uFeather,uCurvature;',
+'uniform float uInkEnabled,uOpacity,uWidth,uAngle,uWrap,uCenterU,uCenterV,uImageRatio,uSelected,uPass,uFeather,uCurvature,uGeodesic;',
 'void main(){',
 'float light=.65+.35*max(.0,dot(normalize(vNormal),normalize(vec3(.38,.55,1.))));',
 'vec3 base=uSkin*light;',
@@ -52,9 +52,11 @@ const FS=[
 'float height=max(.01,width*uImageRatio);',
 'float depth=abs(dot(relative,uNormal));',
 'float maxDepth=mix(.025,.52,clamp(uWrap/1.2,0.,1.));',
-'if(depth>maxDepth)discard;',
 'float minimumFacing=mix(.68,-.20,clamp(uWrap/1.2,0.,1.));',
 'float facing=dot(normalize(vSurfaceNormal),uNormal);',
+'vec2 p;',
+'if(uGeodesic<.5){',
+'if(depth>maxDepth)discard;',
 'if(facing<minimumFacing)discard;',
 'vec2 planar=vec2(dot(relative,uRight),dot(relative,uUp));',
 '// Locally unfold curved skin using its changing surface normal.',
@@ -67,15 +69,19 @@ const FS=[
 'if(abs(sine.x)>.05)factor.x=clamp(abs(theta.x/sine.x),1.,2.5);',
 'if(abs(sine.y)>.05)factor.y=clamp(abs(theta.y/sine.y),1.,2.5);',
 'vec2 unfolded=mix(planar,planar*factor,clamp(uCurvature,0.,1.));',
-'vec2 p=vec2(unfolded.x/width,unfolded.y/height);',
+'p=vec2(unfolded.x/width,unfolded.y/height);',
+'}else{',
+'// Surface-patch UV stores length along the mesh, not planar distance.',
+'p=vec2(vUV.x/width,vUV.y/height);',
+'}',
 'float c=cos(uAngle),s=sin(uAngle);',
 'p=vec2(c*p.x-s*p.y,s*p.x+c*p.y)+.5;',
 'if(p.x>=.0&&p.x<=1.&&p.y>=.0&&p.y<=1.){',
 ' ink=texture2D(uInk,p);',
 ' float edge=min(min(p.x,1.-p.x),min(p.y,1.-p.y));',
 ' float edgeFade=smoothstep(0.,max(.0005,uFeather),edge);',
-' float faceFade=smoothstep(minimumFacing,minimumFacing+.18,facing);',
-' float depthFade=1.-smoothstep(maxDepth*.75,maxDepth,depth);',
+' float faceFade=uGeodesic>.5?1.:smoothstep(minimumFacing,minimumFacing+.18,facing);',
+' float depthFade=uGeodesic>.5?1.:1.-smoothstep(maxDepth*.75,maxDepth,depth);',
 ' ink.a*=edgeFade*faceFade*depthFade;',
 '}',
 '}',
@@ -99,7 +105,7 @@ gl.useProgram(program);
 const uni=name=>gl.getUniformLocation(program,name);
 const u={focus:uni('uFocus'),yaw:uni('uYaw'),pitch:uni('uPitch'),distance:uni('uDistance'),aspect:uni('uAspect'),
 skin:uni('uSkin'),enabled:uni('uInkEnabled'),opacity:uni('uOpacity'),width:uni('uWidth'),angle:uni('uAngle'),
-wrap:uni('uWrap'),centerU:uni('uCenterU'),centerV:uni('uCenterV'),ratio:uni('uImageRatio'),selected:uni('uSelected'),pass:uni('uPass'),anchor:uni('uAnchor'),normal:uni('uNormal'),right:uni('uRight'),up:uni('uUp'),feather:uni('uFeather'),curvature:uni('uCurvature')};
+wrap:uni('uWrap'),centerU:uni('uCenterU'),centerV:uni('uCenterV'),ratio:uni('uImageRatio'),selected:uni('uSelected'),pass:uni('uPass'),anchor:uni('uAnchor'),normal:uni('uNormal'),right:uni('uRight'),up:uni('uUp'),feather:uni('uFeather'),curvature:uni('uCurvature'),geodesic:uni('uGeodesic')};
 const meshes=[];
 const proxyMeshes=meshes;
 let detailedMeshes=null;
@@ -291,7 +297,7 @@ const defaults=(id)=>({
  id,bodyPart:'rightForearm',centerU:0,centerV:.52,
  anchor:null,normal:null,drawnAnchor:null,drawnNormal:null,drawnRight:null,widthCm:8,
  drawnU:0,drawnV:.52,scale:.65,rotation:0,opacity:.9,depth:.65,
- imageRatio:1,texture:null,visible:true,feather:0.025,curvature:0.75
+ imageRatio:1,texture:null,visible:true,feather:0.025,curvature:0.75,surfacePatch:true
 });
 function current(){return tattoos.get(activeId)}
 function uploadTexture(id,uri,initial){
@@ -325,7 +331,7 @@ function save(){
    const t=tattoos.get(id);
    return {id,bodyPart:t.bodyPart,centerU:t.centerU,centerV:t.centerV,
     anchor:t.anchor,normal:t.normal,widthCm:t.widthCm,
-    scale:t.scale,rotation:t.rotation,opacity:t.opacity,depth:t.depth,feather:t.feather,curvature:t.curvature,
+    scale:t.scale,rotation:t.rotation,opacity:t.opacity,depth:t.depth,feather:t.feather,curvature:t.curvature,surfacePatch:t.surfacePatch,
     visible:t.visible};
  })}));
 }
@@ -395,6 +401,7 @@ window.setPlacement=function(raw){
  if(typeof p.depth==='number')t.depth=clamp(p.depth,.15,1.2);
  if(typeof p.feather==='number')t.feather=clamp(p.feather,0,.15);
  if(typeof p.curvature==='number')t.curvature=clamp(p.curvature,0,1);
+ if(typeof p.surfacePatch==='boolean')t.surfacePatch=p.surfacePatch;
  if(typeof p.visible==='boolean')t.visible=p.visible;
  if(typeof p.widthCm==='number')t.widthCm=clamp(p.widthCm,1,40);
 };
@@ -460,7 +467,7 @@ window.nudgeTattoo=function(dx,dy){
 };
 window.resetPlacement=function(){
  const t=current();if(!t)return;
- Object.assign(t,{centerU:0,centerV:.5,drawnU:0,drawnV:.5,anchor:null,normal:null,drawnAnchor:null,scale:.65,widthCm:8,rotation:0,opacity:.9,depth:.65,feather:.025,curvature:.75});
+ Object.assign(t,{centerU:0,centerV:.5,drawnU:0,drawnV:.5,anchor:null,normal:null,drawnAnchor:null,scale:.65,widthCm:8,rotation:0,opacity:.9,depth:.65,feather:.025,curvature:.75,surfacePatch:true});
  save();
 };
 function transform(p){
