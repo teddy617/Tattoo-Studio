@@ -425,7 +425,10 @@ window.setPlacement=function(raw){
  if(typeof p.depth==='number')t.depth=clamp(p.depth,.15,1.2);
  if(typeof p.feather==='number')t.feather=clamp(p.feather,0,.15);
  if(typeof p.curvature==='number')t.curvature=clamp(p.curvature,0,1);
- if(typeof p.surfacePatch==='boolean')t.surfacePatch=p.surfacePatch;
+ if(typeof p.surfacePatch==='boolean'){
+  t.surfacePatch=p.surfacePatch;
+  if(!t.surfacePatch)releaseSurfacePatch(t);
+ }
  if(typeof p.visible==='boolean')t.visible=p.visible;
  if(typeof p.widthCm==='number'){
   t.widthCm=clamp(p.widthCm,1,40);
