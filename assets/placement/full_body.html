@@ -251,7 +251,7 @@ window.setAnatomyMode=function(value){
  activeMeshes=useDetailed?detailedMeshes:proxyMeshes;
  if(before!==activeMeshes){
   for(const t of tattoos.values()){
-   t.anchor=null;t.normal=null;t.drawnAnchor=null;t.drawnNormal=null;
+   t.anchor=null;t.normal=null;t.drawnAnchor=null;t.drawnNormal=null;t.drawnRight=null;
   }
  }
  view(focusRegion,false);
@@ -275,7 +275,7 @@ const order=[];
 let activeId='current';
 const defaults=(id)=>({
  id,bodyPart:'rightForearm',centerU:0,centerV:.52,
- anchor:null,normal:null,drawnAnchor:null,drawnNormal:null,widthCm:8,
+ anchor:null,normal:null,drawnAnchor:null,drawnNormal:null,drawnRight:null,widthCm:8,
  drawnU:0,drawnV:.52,scale:.65,rotation:0,opacity:.9,depth:.65,
  imageRatio:1,texture:null,visible:true,feather:0.025
 });
@@ -342,6 +342,7 @@ function view(region,autoPlace){
    t.anchor=mesh.points[nearest].slice();
    t.normal=normalized(mesh.verts.slice(nearest*8+3,nearest*8+6));
    t.drawnAnchor=t.anchor.slice();
+   t.drawnNormal=null;t.drawnRight=null;
   }
  }
  save();
@@ -427,8 +428,8 @@ window.nudgeTattoo=function(dx,dy){
  const vertical=Math.abs(n[1])>.90?[0,0,1]:[0,1,0];
  const tangent=normalized(cross(vertical,n));
  const up=normalized(cross(n,tangent));
- // Each nudge is about 2 mm on the illustrative 170 cm mannequin.
- const step=6.52*0.2/170;
+ // Each nudge is approximately 5 mm on the illustrative 170 cm mannequin.
+ const step=6.52*0.5/170;
  const target=t.anchor.map((v,i)=>v+step*(dx*tangent[i]+dy*up[i]));
  let nearest=0,best=Infinity;
  for(let i=0;i<mesh.points.length;i++){
@@ -613,7 +614,14 @@ for(const id of order){
  t.drawnNormal=normalized(t.drawnNormal.map((v,i)=>lerp(v,t.normal[i],.18)));
  const n=normalized(t.drawnNormal);
  const upCandidate=Math.abs(n[1])>.9?[0,0,1]:[0,1,0];
- const right=normalized(cross(upCandidate,n));
+ let right=null;
+ if(Array.isArray(t.drawnRight)){
+   const projection=dot(t.drawnRight,n);
+   const candidate=t.drawnRight.map((v,i)=>v-projection*n[i]);
+   if(Math.hypot(...candidate)>.1)right=normalized(candidate);
+ }
+ if(!right)right=normalized(cross(upCandidate,n));
+ t.drawnRight=right.slice();
  const up=normalized(cross(n,right));
  gl.uniform3fv(u.anchor,t.drawnAnchor);
  gl.uniform3fv(u.normal,n);gl.uniform3fv(u.right,right);gl.uniform3fv(u.up,up);
