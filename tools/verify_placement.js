@@ -28,7 +28,11 @@ const gl = new Proxy({}, {
     if (key === 'getUniformLocation') return (_program, name) => name;
     if (key === 'uniform1f') return (name, value) => { uniforms[name] = value; };
     if (key === 'drawElements') return () => {
-      if (uniforms.uGeodesic === 1) surfacePatchDraws++;
+      if (uniforms.uGeodesic === 1) {
+        assert.equal(uniforms.uSelected, 1,
+          'Surface patch must enable tattoo rendering in the shader');
+        surfacePatchDraws++;
+      }
     };
     if (['createShader', 'createProgram', 'createBuffer',
       'createTexture'].includes(key)) return () => ({});
@@ -87,6 +91,13 @@ nextFrame();
 nextFrame();
 assert.ok(surfacePatchDraws > 0,
   'Detailed mannequin must draw at least one skin-connected tattoo patch');
+const previousPatchDraws = surfacePatchDraws;
+bridge.setAnatomyMode('basic');
+nextFrame();
+assert.equal(surfacePatchDraws, previousPatchDraws,
+  'Basic mannequin must use the older planar fallback');
+bridge.setAnatomyMode('detailed');
+nextFrame();
 bridge.nudgeTattoo(1, 0);
 bridge.resetView();
 bridge.restorePlacement({
