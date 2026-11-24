@@ -110,6 +110,7 @@ const meshes=[];
 const proxyMeshes=meshes;
 let detailedMeshes=null;
 let activeMeshes=meshes;
+let skinGraph=null;
 let useDetailed=true;
 let preferDetailed=true;
 function cross(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]]}
@@ -190,6 +191,19 @@ window.finishAnatomy=function(){
    for(const idx of [a,b,c])for(let i=0;i<3;i++)normals[idx][i]+=n[i];
   }
   for(let i=0;i<normals.length;i++)normals[i]=normalized(normals[i]);
+  // Shared mesh edges continue across visualization-region boundaries.
+  const neighbors=vertices.map(()=>[]);
+  for(const triangle of faces){
+    for(let k=0;k<3;k++){
+      const a=triangle[k],b=triangle[(k+1)%3];
+      const length=Math.hypot(...vertices[a].map((v,j)=>v-vertices[b][j]));
+      if(length>.000001){
+        neighbors[a].push([b,length]);
+        neighbors[b].push([a,length]);
+      }
+    }
+  }
+  skinGraph={vertices,normals,faces,neighbors};
   const groups=new Map();
   function group(p){
    const x=p[0],y=p[1];
@@ -259,7 +273,7 @@ window.finishAnatomy=function(){
   view(focusRegion,false);
   bridge(JSON.stringify({type:'anatomyLoaded',meshes:out.length,faces:faces.length}));
  }catch(e){
-  activeMeshes=proxyMeshes;useDetailed=false;
+  activeMeshes=proxyMeshes;useDetailed=false;skinGraph=null;
   bridge(JSON.stringify({type:'anatomyFailed',reason:e.message}));
   label.textContent='Using basic mannequin: detailed model unavailable';
  }
