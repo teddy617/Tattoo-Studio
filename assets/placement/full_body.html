@@ -267,8 +267,16 @@ window.finishAnatomy=function(){
     count:data.indices.length,center:data.min.map((v,i)=>(v+data.max[i])/2),
     radius:Math.hypot(...data.max.map((v,i)=>(v-data.min[i])/2))});
   }
+  const previousMeshes=activeMeshes;
   detailedMeshes=out;useDetailed=preferDetailed;
   activeMeshes=useDetailed?detailedMeshes:proxyMeshes;
+  if(previousMeshes!==activeMeshes){
+    for(const t of tattoos.values()){
+      releaseSurfacePatch(t);
+      t.anchor=null;t.normal=null;
+      t.drawnAnchor=null;t.drawnNormal=null;t.drawnRight=null;
+    }
+  }
   label.textContent='Anatomical MakeHuman model ready';
   view(focusRegion,false);
   bridge(JSON.stringify({type:'anatomyLoaded',meshes:out.length,faces:faces.length}));
