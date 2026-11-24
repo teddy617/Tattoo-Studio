@@ -203,3 +203,16 @@
 - [x] Expand offline placement smoke checks for shader presence and multi-tattoo curvature restoration.
 - [ ] Confirm curvature strength, seam appearance and GPU performance on physical Android devices; shader compilation cannot be verified by JS smoke tests alone.
 - [ ] Implement true geodesic/mesh-unwrapped tattoo charts for highly curved shoulders and joints. This version applies an approximate normal-based correction, **not** physically accurate geodesic unwrap.
+
+## v0.9.5 — connected-skin patch prototype (source implemented, Android verification pending)
+- [x] Build shared triangle-edge adjacency from the CC0 anatomical mesh across display-region boundaries.
+- [x] Find local shortest paths along mesh edges and transport a tattoo's tangent frame across the connected skin patch.
+- [x] Draw an intrinsic-distance texture chart as a bounded surface overlay instead of projecting through the body.
+- [x] Continue across adjacent anatomical display regions when the underlying mesh is connected.
+- [x] Keep existing planar/normal-correction wrapping as a fallback for Basic mannequin, moving tattoos, invalid or oversized surface patches.
+- [x] Add a per-tattoo **Follow connected skin** switch and retain it with the other saved tattoo settings.
+- [x] Cache surface patch buffers, regenerate only when the anchor/size changes, and release GPU memory on removal/model switch.
+- [x] Defer surface patch display until placement movement eases into position.
+- [x] Extend offline GitHub Actions smoke tests to check real anatomical model loading, patch draw pass, Basic-mode fallback, gesture handling and multi-tattoo settings restoration.
+- [ ] Test the APK on Android for rendering, shading, skin seams, high-curvature tattoos and frame rates.
+- **Limitations:** The patch is an approximate shortest-path local unfolding, not a rigorously distortion-free geodesic UV atlas. Large tattoos and complex folds may still distort. This is a visualization aid, not a calibrated tattoo transfer template.
