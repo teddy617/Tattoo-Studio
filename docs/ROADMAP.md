@@ -195,3 +195,11 @@
 - [x] Add a dependency-free viewer smoke test (anatomical model, gesture handling, multi-tattoo restoration) and run it before Flutter tests in GitHub Actions.
 - [ ] Validate on Android device: shader appearance, edge blending, rotation, nudge response and 3D frame rate.
 - [ ] Replace tangent-plane stamping with surface-aware geodesic deformation for highly curved shoulders/joints; current feathering reduces harsh cutoffs but is not true skin-wrapped deformation.
+
+## v0.9.4 — local curvature compensation for surface wrapping
+- [x] Add shader-based arc-length correction from changes in 3D surface normals, reducing tattoo compression on curved limbs and shoulders.
+- [x] Per-tattoo Curve conform slider (0–100%), retaining the prior planar look when set to zero.
+- [x] Save curve-conform strength with each tattoo alongside opacity, placement, edge softness and width.
+- [x] Expand offline placement smoke checks for shader presence and multi-tattoo curvature restoration.
+- [ ] Confirm curvature strength, seam appearance and GPU performance on physical Android devices; shader compilation cannot be verified by JS smoke tests alone.
+- [ ] Implement true geodesic/mesh-unwrapped tattoo charts for highly curved shoulders and joints. This version applies an approximate normal-based correction, **not** physically accurate geodesic unwrap.
