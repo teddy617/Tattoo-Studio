@@ -35,6 +35,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
   double _size = 0.65;
   double _rotation = 0;
   double _depth = 0.6;
+  double _feather = 0.025;
   double _widthCm = 8;
   bool _placeMode = false;
   String _viewPart = 'full';
@@ -116,6 +117,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
                     _rotation = ((t['rotation'] as num?)?.toDouble() ?? 0).clamp(-180, 180);
                     _opacity = ((t['opacity'] as num?)?.toDouble() ?? .9).clamp(0, 1);
                     _depth = ((t['depth'] as num?)?.toDouble() ?? .65).clamp(.15, 1.2);
+                    _feather = ((t['feather'] as num?)?.toDouble() ?? .025).clamp(0, .15);
                     _widthCm = ((t['widthCm'] as num?)?.toDouble() ?? 8).clamp(1, 40);
                     _tattooVisible = t['visible'] != false;
                   });
@@ -252,6 +254,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
             'rotation': _rotation,
             'opacity': _opacity,
             'depth': _depth,
+            'feather': _feather,
             'widthCm': _widthCm,
             'visible': _tattooVisible,
           });
@@ -351,6 +354,12 @@ class _PlacementScreenState extends State<PlacementScreen> {
     await _controller.runJavaScript('setTattoo(' + jsonEncode(uri) + ')');
   }
 
+  Future<void> _nudge(int dx, int dy) async {
+    if (!_ready) return;
+    await _controller.runJavaScript('nudgeTattoo(' +
+        dx.toString() + ',' + dy.toString() + ')');
+  }
+
   Future<void> _syncPlacement() async {
     if (!_ready) return;
     final data = jsonEncode({
@@ -358,6 +367,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
       'scale': _size,
       'rotation': _rotation,
       'depth': _depth,
+      'feather': _feather,
       'widthCm': _widthCm,
       'visible': _tattooVisible,
     });
@@ -482,7 +492,8 @@ class _PlacementScreenState extends State<PlacementScreen> {
                       _size = .65;
                       _rotation = 0;
                       _opacity = .9;
-                      _depth = .6;
+                      _depth = .65;
+                      _feather = .025;
                       _widthCm = 8;
                     });
                     _syncPlacement();
@@ -561,6 +572,37 @@ class _PlacementScreenState extends State<PlacementScreen> {
               _slider('Rotation', _rotation, -180, 180, (v) => _rotation = v),
               _slider('Opacity', _opacity, 0, 1, (v) => _opacity = v),
               _slider('Wrap depth', _depth, .15, 1.2, (v) => _depth = v),
+              _slider('Edge softness', _feather, 0, .15,
+                  (v) => _feather = v),
+              Row(children: [
+                const SizedBox(width: 88, child: Text('Fine move')),
+                IconButton(
+                  tooltip: 'Move left on skin',
+                  icon: const Icon(Icons.arrow_left),
+                  onPressed: !_ready ? null : () => _nudge(-1, 0),
+                ),
+                IconButton(
+                  tooltip: 'Move up on skin',
+                  icon: const Icon(Icons.arrow_upward),
+                  onPressed: !_ready ? null : () => _nudge(0, 1),
+                ),
+                IconButton(
+                  tooltip: 'Move down on skin',
+                  icon: const Icon(Icons.arrow_downward),
+                  onPressed: !_ready ? null : () => _nudge(0, -1),
+                ),
+                IconButton(
+                  tooltip: 'Move right on skin',
+                  icon: const Icon(Icons.arrow_right),
+                  onPressed: !_ready ? null : () => _nudge(1, 0),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: !_ready ? null : () =>
+                      _controller.runJavaScript('resetView()'),
+                  child: const Text('Fit view'),
+                ),
+              ]),
               const Text(
                 'Select a tattoo to adjust it separately. Add designs from '
                 'the gallery or project layers. Width is an approximate preview '
