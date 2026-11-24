@@ -16,12 +16,20 @@ assert.ok(script.includes("uCurvature"),
 
 const events = [];
 const handlers = {};
+const uniforms = {};
+let surfacePatchDraws = 0;
+let nextFrame;
+let elapsed = 1000;
 const gl = new Proxy({}, {
   get(_target, key) {
     if (key === 'getShaderParameter' || key === 'getProgramParameter')
       return () => true;
     if (key === 'getAttribLocation') return () => 0;
-    if (key === 'getUniformLocation') return () => ({});
+    if (key === 'getUniformLocation') return (_program, name) => name;
+    if (key === 'uniform1f') return (name, value) => { uniforms[name] = value; };
+    if (key === 'drawElements') return () => {
+      if (uniforms.uGeodesic === 1) surfacePatchDraws++;
+    };
     if (['createShader', 'createProgram', 'createBuffer',
       'createTexture'].includes(key)) return () => ({});
     if (typeof key === 'string' && key === key.toUpperCase()) return 1;
@@ -48,10 +56,10 @@ class MockImage {
 vm.runInNewContext(script, {
   document: { getElementById: id => id === 'view' ? canvas : status },
   window: bridge,
-  requestAnimationFrame() {},
+  requestAnimationFrame(callback) { nextFrame = callback; },
   devicePixelRatio: 1,
   Image: MockImage,
-  performance: { now: () => 1000 },
+  performance: { now: () => elapsed },
 }, { timeout: 15000 });
 
 const parsed = () => events.map(value => {
@@ -74,6 +82,11 @@ assert.ok(loaded && loaded.faces > 10000,
   'Detailed anatomical surface must parse and load');
 
 bridge.selectPart('rightForearm');
+elapsed = 2400;
+nextFrame();
+nextFrame();
+assert.ok(surfacePatchDraws > 0,
+  'Detailed mannequin must draw at least one skin-connected tattoo patch');
 bridge.nudgeTattoo(1, 0);
 bridge.resetView();
 bridge.restorePlacement({
@@ -82,7 +95,7 @@ bridge.restorePlacement({
   tattoos: [
     { id: 'current', bodyPart: 'leftCalf', centerU: .4, centerV: .5 },
     { id: 'second', bodyPart: 'chest', centerU: .1, centerV: .5,
-      feather: .06, curvature: .8, widthCm: 12 },
+      feather: .06, curvature: .8, widthCm: 12, surfacePatch: true },
   ],
 });
 // Simulate Android tap and drag to detect removed/undefined gesture variables.
@@ -94,4 +107,5 @@ assert.equal(state.tattoos.length, 2);
 assert.equal(state.activeId, 'second');
 assert.equal(state.tattoos.find(t => t.id === 'second').feather, .06);
 assert.equal(state.tattoos.find(t => t.id === 'second').curvature, .8);
-console.log('Placement smoke test passed: model, controls, gestures, two tattoos, restore.');
+assert.equal(state.tattoos.find(t => t.id === 'second').surfacePatch, true);
+console.log('Placement smoke test passed: model, connected skin patch, gestures, two tattoos, restore.');
