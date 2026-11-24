@@ -36,6 +36,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
   double _rotation = 0;
   double _depth = 0.6;
   double _feather = 0.025;
+  double _curvature = 0.75;
   double _widthCm = 8;
   bool _placeMode = false;
   String _viewPart = 'full';
@@ -118,6 +119,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
                     _opacity = ((t['opacity'] as num?)?.toDouble() ?? .9).clamp(0, 1);
                     _depth = ((t['depth'] as num?)?.toDouble() ?? .65).clamp(.15, 1.2);
                     _feather = ((t['feather'] as num?)?.toDouble() ?? .025).clamp(0, .15);
+                    _curvature = ((t['curvature'] as num?)?.toDouble() ?? .75).clamp(0, 1);
                     _widthCm = ((t['widthCm'] as num?)?.toDouble() ?? 8).clamp(1, 40);
                     _tattooVisible = t['visible'] != false;
                   });
@@ -255,6 +257,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
             'opacity': _opacity,
             'depth': _depth,
             'feather': _feather,
+            'curvature': _curvature,
             'widthCm': _widthCm,
             'visible': _tattooVisible,
           });
@@ -368,6 +371,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
       'rotation': _rotation,
       'depth': _depth,
       'feather': _feather,
+      'curvature': _curvature,
       'widthCm': _widthCm,
       'visible': _tattooVisible,
     });
@@ -494,6 +498,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
                       _opacity = .9;
                       _depth = .65;
                       _feather = .025;
+                      _curvature = .75;
                       _widthCm = 8;
                     });
                     _syncPlacement();
@@ -574,6 +579,8 @@ class _PlacementScreenState extends State<PlacementScreen> {
               _slider('Wrap depth', _depth, .15, 1.2, (v) => _depth = v),
               _slider('Edge softness', _feather, 0, .15,
                   (v) => _feather = v),
+              _slider('Curve conform', _curvature, 0, 1,
+                  (v) => _curvature = v),
               Row(children: [
                 const SizedBox(width: 64, child: Text('Nudge')),
                 IconButton(
