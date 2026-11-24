@@ -37,6 +37,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
   double _depth = 0.6;
   double _feather = 0.025;
   double _curvature = 0.75;
+  bool _surfacePatch = true;
   double _widthCm = 8;
   bool _placeMode = false;
   String _viewPart = 'full';
@@ -120,6 +121,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
                     _depth = ((t['depth'] as num?)?.toDouble() ?? .65).clamp(.15, 1.2);
                     _feather = ((t['feather'] as num?)?.toDouble() ?? .025).clamp(0, .15);
                     _curvature = ((t['curvature'] as num?)?.toDouble() ?? .75).clamp(0, 1);
+                    _surfacePatch = t['surfacePatch'] != false;
                     _widthCm = ((t['widthCm'] as num?)?.toDouble() ?? 8).clamp(1, 40);
                     _tattooVisible = t['visible'] != false;
                   });
@@ -258,6 +260,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
             'depth': _depth,
             'feather': _feather,
             'curvature': _curvature,
+            'surfacePatch': _surfacePatch,
             'widthCm': _widthCm,
             'visible': _tattooVisible,
           });
@@ -372,6 +375,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
       'depth': _depth,
       'feather': _feather,
       'curvature': _curvature,
+      'surfacePatch': _surfacePatch,
       'widthCm': _widthCm,
       'visible': _tattooVisible,
     });
@@ -499,6 +503,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
                       _depth = .65;
                       _feather = .025;
                       _curvature = .75;
+                      _surfacePatch = true;
                       _widthCm = 8;
                     });
                     _syncPlacement();
@@ -581,6 +586,22 @@ class _PlacementScreenState extends State<PlacementScreen> {
                   (v) => _feather = v),
               _slider('Curve conform', _curvature, 0, 1,
                   (v) => _curvature = v),
+              SwitchListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Follow connected skin'),
+                subtitle: const Text(
+                  'Experimental surface patch on Anatomical model. '
+                  'Switch off for previous projection.',
+                  style: TextStyle(fontSize: 11),
+                ),
+                value: _surfacePatch,
+                onChanged: (enabled) {
+                  setState(() => _surfacePatch = enabled);
+                  _syncPlacement();
+                  _saveState();
+                },
+              ),
               Row(children: [
                 const SizedBox(width: 64, child: Text('Nudge')),
                 IconButton(
