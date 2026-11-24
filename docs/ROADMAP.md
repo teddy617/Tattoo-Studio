@@ -184,3 +184,14 @@
 - [x] Invalidate and reproject placement anchors when switching Detailed / Basic mesh.
 - [ ] Test latest Android build on device: smooth rotations, tattoo layer movement, detailed model appearance, saved multi-tattoo preview and old-project migration.
 - This is still a generic body mesh, with approximate surface region boundaries and tattoo widths; placement is not an anatomical scan or clinical measurement.
+
+## v0.9.3 — smoother placement, edge blend and gesture stability
+- [x] Add an edge-feather slider per tattoo, persisted with its independent placement.
+- [x] Smooth the tattoo's surface orientation during movement to reduce twisting on sloping/curved anatomy.
+- [x] Keep a moving tattoo on its selected surface region during dragging, while allowing tap-to-reposition.
+- [x] Add directional precision nudges and a Fit view camera control.
+- [x] Fade tattoo projection near texture edges, high-curvature facing limits and projection depth boundaries.
+- [x] Cull distant body meshes during each tattoo render pass to reduce mobile GPU work.
+- [x] Add a dependency-free viewer smoke test (anatomical model, gesture handling, multi-tattoo restoration) and run it before Flutter tests in GitHub Actions.
+- [ ] Validate on Android device: shader appearance, edge blending, rotation, nudge response and 3D frame rate.
+- [ ] Replace tangent-plane stamping with surface-aware geodesic deformation for highly curved shoulders/joints; current feathering reduces harsh cutoffs but is not true skin-wrapped deformation.
