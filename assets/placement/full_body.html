@@ -251,7 +251,7 @@ window.setAnatomyMode=function(value){
  activeMeshes=useDetailed?detailedMeshes:proxyMeshes;
  if(before!==activeMeshes){
   for(const t of tattoos.values()){
-   t.anchor=null;t.normal=null;t.drawnAnchor=null;
+   t.anchor=null;t.normal=null;t.drawnAnchor=null;t.drawnNormal=null;
   }
  }
  view(focusRegion,false);
@@ -275,7 +275,7 @@ const order=[];
 let activeId='current';
 const defaults=(id)=>({
  id,bodyPart:'rightForearm',centerU:0,centerV:.52,
- anchor:null,normal:null,drawnAnchor:null,widthCm:8,
+ anchor:null,normal:null,drawnAnchor:null,drawnNormal:null,widthCm:8,
  drawnU:0,drawnV:.52,scale:.65,rotation:0,opacity:.9,depth:.65,
  imageRatio:1,texture:null,visible:true,feather:0.025
 });
@@ -414,6 +414,33 @@ window.restorePlacement=function(raw){
 window.setMode=function(value){
  mode=value==='place'?'place':'orbit';
  label.textContent=mode==='place'?'Drag the active tattoo along the body':'Drag to orbit • Pinch to zoom';
+};
+window.resetView=function(){
+ yaw=.22;pitch=.03;
+ view(focusRegion,false);
+};
+window.nudgeTattoo=function(dx,dy){
+ const t=current();if(!t)return;
+ const mesh=meshBy(regions[t.bodyPart]);if(!mesh||!mesh.points.length)return;
+ if(!Array.isArray(t.anchor)||!Array.isArray(t.normal))return;
+ const n=normalized(t.normal);
+ const vertical=Math.abs(n[1])>.90?[0,0,1]:[0,1,0];
+ const tangent=normalized(cross(vertical,n));
+ const up=normalized(cross(n,tangent));
+ // Each nudge is about 2 mm on the illustrative 170 cm mannequin.
+ const step=6.52*0.2/170;
+ const target=t.anchor.map((v,i)=>v+step*(dx*tangent[i]+dy*up[i]));
+ let nearest=0,best=Infinity;
+ for(let i=0;i<mesh.points.length;i++){
+  const p=mesh.points[i];
+  const d=(p[0]-target[0])**2+(p[1]-target[1])**2+(p[2]-target[2])**2;
+  if(d<best){best=d;nearest=i}
+ }
+ t.anchor=mesh.points[nearest].slice();
+ t.normal=normalized(mesh.verts.slice(nearest*8+3,nearest*8+6));
+ t.centerU=mesh.verts[nearest*8+6];
+ t.centerV=mesh.verts[nearest*8+7];
+ save();
 };
 window.resetPlacement=function(){
  const t=current();if(!t)return;
@@ -582,7 +609,9 @@ for(const id of order){
  if(!Array.isArray(t.anchor)||!Array.isArray(t.normal))continue;
  if(!t.drawnAnchor)t.drawnAnchor=t.anchor.slice();
  t.drawnAnchor=t.drawnAnchor.map((v,i)=>lerp(v,t.anchor[i],.25));
- const n=normalized(t.normal);
+ if(!t.drawnNormal)t.drawnNormal=t.normal.slice();
+ t.drawnNormal=normalized(t.drawnNormal.map((v,i)=>lerp(v,t.normal[i],.18)));
+ const n=normalized(t.drawnNormal);
  const upCandidate=Math.abs(n[1])>.9?[0,0,1]:[0,1,0];
  const right=normalized(cross(upCandidate,n));
  const up=normalized(cross(n,right));
