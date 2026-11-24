@@ -9,6 +9,10 @@ const html = fs.readFileSync('assets/placement/full_body.html', 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
 assert.ok(script, 'Bundled inline WebGL script must exist');
 new vm.Script(script);
+assert.ok(script.includes("atan(sideways,vec2(facingClamped))"),
+  'Curved-surface angular correction must be part of the shader');
+assert.ok(script.includes("uCurvature"),
+  'Surface conformance must remain adjustable');
 
 const events = [];
 const handlers = {};
@@ -57,7 +61,7 @@ assert.ok(parsed().includes('ready'), 'Viewer must signal ready');
 bridge.setTattoo('data:image/png;base64,mock');
 bridge.addTattoo('second', 'data:image/png;base64,mock');
 bridge.selectTattoo('second');
-bridge.setPlacement({ widthCm: 12, feather: .06, opacity: .7 });
+bridge.setPlacement({ widthCm: 12, feather: .06, curvature: .8, opacity: .7 });
 bridge.setMode('place');
 
 const model = fs.readFileSync('assets/placement/models/makehuman_cc0.obj', 'utf8');
@@ -78,7 +82,7 @@ bridge.restorePlacement({
   tattoos: [
     { id: 'current', bodyPart: 'leftCalf', centerU: .4, centerV: .5 },
     { id: 'second', bodyPart: 'chest', centerU: .1, centerV: .5,
-      feather: .06, widthCm: 12 },
+      feather: .06, curvature: .8, widthCm: 12 },
   ],
 });
 // Simulate Android tap and drag to detect removed/undefined gesture variables.
@@ -89,4 +93,5 @@ const state = parsed().filter(value => value?.type === 'state').at(-1);
 assert.equal(state.tattoos.length, 2);
 assert.equal(state.activeId, 'second');
 assert.equal(state.tattoos.find(t => t.id === 'second').feather, .06);
+assert.equal(state.tattoos.find(t => t.id === 'second').curvature, .8);
 console.log('Placement smoke test passed: model, controls, gestures, two tattoos, restore.');
