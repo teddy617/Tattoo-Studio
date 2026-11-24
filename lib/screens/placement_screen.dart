@@ -575,7 +575,7 @@ class _PlacementScreenState extends State<PlacementScreen> {
               _slider('Edge softness', _feather, 0, .15,
                   (v) => _feather = v),
               Row(children: [
-                const SizedBox(width: 88, child: Text('Fine move')),
+                const SizedBox(width: 64, child: Text('Nudge')),
                 IconButton(
                   tooltip: 'Move left on skin',
                   icon: const Icon(Icons.arrow_left),
