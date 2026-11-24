@@ -744,6 +744,7 @@ function drawMesh(mesh){
  }
  gl.drawElements(gl.TRIANGLES,mesh.count,gl.UNSIGNED_SHORT,0);
 }
+gl.uniform1f(u.geodesic,0);
 gl.uniform1f(u.pass,0);gl.depthMask(true);gl.disable(gl.BLEND);
 for(const mesh of activeMeshes)drawMesh(mesh);
 gl.enable(gl.BLEND);
