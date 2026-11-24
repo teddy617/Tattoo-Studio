@@ -285,6 +285,7 @@ window.setAnatomyMode=function(value){
  activeMeshes=useDetailed?detailedMeshes:proxyMeshes;
  if(before!==activeMeshes){
   for(const t of tattoos.values()){
+   releaseSurfacePatch(t);
    t.anchor=null;t.normal=null;t.drawnAnchor=null;t.drawnNormal=null;t.drawnRight=null;
   }
  }
@@ -401,6 +402,7 @@ window.removeTattoo=function(id){
  const t=tattoos.get(id);
  if(!t)return;
  if(t.texture)gl.deleteTexture(t.texture);
+ releaseSurfacePatch(t);
  tattoos.delete(id);
  const i=order.indexOf(id);if(i>=0)order.splice(i,1);
  if(activeId===id)activeId='current';
@@ -417,7 +419,10 @@ window.setPlacement=function(raw){
  if(typeof p.curvature==='number')t.curvature=clamp(p.curvature,0,1);
  if(typeof p.surfacePatch==='boolean')t.surfacePatch=p.surfacePatch;
  if(typeof p.visible==='boolean')t.visible=p.visible;
- if(typeof p.widthCm==='number')t.widthCm=clamp(p.widthCm,1,40);
+ if(typeof p.widthCm==='number'){
+  t.widthCm=clamp(p.widthCm,1,40);
+  t.patchPendingUntil=performance.now()+160;
+ }
 };
 window.restorePlacement=function(raw){
  const p=typeof raw==='string'?JSON.parse(raw):raw;
@@ -427,7 +432,7 @@ window.restorePlacement=function(raw){
    const t=tattoos.get(record.id);
    if(!t)continue;
    Object.assign(t,record);
-   if(oldGeometry){t.anchor=null;t.normal=null;t.drawnAnchor=null;}
+   if(oldGeometry){releaseSurfacePatch(t);t.anchor=null;t.normal=null;t.drawnAnchor=null;}
    t.drawnU=t.centerU;t.drawnV=t.centerV;
    if(Array.isArray(t.anchor))t.drawnAnchor=t.anchor.slice();
   }
@@ -440,7 +445,7 @@ window.restorePlacement=function(raw){
    if(typeof p.centerU==='number')t.centerU=p.centerU;
    else if(Array.isArray(p.point))t.centerU=Math.atan2(p.point[0],p.point[2])/(2*Math.PI);
    if(typeof p.centerV==='number')t.centerV=p.centerV;
-   if(oldGeometry){t.anchor=null;t.normal=null;t.drawnAnchor=null;}
+   if(oldGeometry){releaseSurfacePatch(t);t.anchor=null;t.normal=null;t.drawnAnchor=null;}
    t.drawnU=t.centerU;t.drawnV=t.centerV;
    if(Array.isArray(t.anchor))t.drawnAnchor=t.anchor.slice();
   }
@@ -547,6 +552,7 @@ if(focusRegion==='full')t.bodyPart=best.mesh.id==='torso'?(best.U>.25&&best.U<.7
 else t.bodyPart=focusRegion;
 t.centerU=best.U;t.centerV=best.V;
 t.anchor=best.position;t.normal=best.normal;
+if(lockToPart)t.dragging=true;
 if(!t.drawnAnchor)t.drawnAnchor=best.position.slice();
 return true;
 }
@@ -583,9 +589,16 @@ if(mode==='place'&&!pinching){
 }
 active.delete(e.pointerId);
 if(active.size<2)lastPinch=0;
-if(active.size===0){pinching=false;if(mode==='place')save();}
+if(active.size===0){
+ pinching=false;
+ const t=current();if(t)t.dragging=false;
+ if(mode==='place')save();
+}
 });
-canvas.addEventListener('pointercancel',e=>{active.delete(e.pointerId);lastPinch=0;pinching=false});
+canvas.addEventListener('pointercancel',e=>{
+ active.delete(e.pointerId);lastPinch=0;pinching=false;
+ const t=current();if(t)t.dragging=false;
+});
 canvas.addEventListener('wheel',e=>{e.preventDefault();targetDistance=clamp(targetDistance*(1+Math.sign(e.deltaY)*.07),2.25,15)},{passive:false});
 
 // A bounded, mesh-connected local surface chart for each tattoo.
@@ -727,6 +740,7 @@ gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
 gl.depthMask(false);
 gl.depthFunc(gl.LEQUAL);
 gl.uniform1f(u.pass,1);gl.uniform1f(u.enabled,1);
+let patchesBuiltThisFrame=0;
 for(const id of order){
  const t=tattoos.get(id);
  if(!t||!t.texture||t.visible===false)continue;
@@ -778,6 +792,29 @@ for(const id of order){
  gl.uniform1f(u.centerU,t.drawnU);
  gl.uniform1f(u.centerV,t.drawnV);
  gl.uniform1f(u.ratio,clamp(t.imageRatio,.2,4));
+ let usedPatch=false;
+ if(t.surfacePatch!==false&&skinGraph&&activeMeshes===detailedMeshes&&!t.dragging){
+  const signature=[...t.anchor.map(v=>v.toFixed(3)),width.toFixed(3),
+    t.imageRatio.toFixed(3),t.bodyPart].join(':');
+  if(t.patchSignature!==signature&&patchesBuiltThisFrame<1&&
+     performance.now()>(t.patchPendingUntil||0)){
+   releaseSurfacePatch(t);
+   try{t.patch=createSurfacePatch(t,width)}
+   catch(error){bridge(JSON.stringify({type:'patchWarning',reason:String(error)}))}
+   t.patchSignature=signature;
+   patchesBuiltThisFrame++;
+  }
+  if(t.patch&&t.patchSignature===signature){
+    gl.uniform1f(u.geodesic,1);
+    gl.enable(gl.POLYGON_OFFSET_FILL);
+    gl.polygonOffset(-1,-1);
+    drawMesh(t.patch);
+    gl.disable(gl.POLYGON_OFFSET_FILL);
+    usedPatch=true;
+  }
+ }
+ if(usedPatch)continue;
+ gl.uniform1f(u.geodesic,0);
  for(const mesh of activeMeshes){
   // Cull distant anatomy parts before each decal pass. Nearby regions
   // still participate, allowing a tattoo to cross a visible mesh seam.
