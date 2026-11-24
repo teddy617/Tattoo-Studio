@@ -129,7 +129,9 @@ indices.push(i,i+segments+1,i+1,i+1,i+segments+1,i+segments+2);
 const vb=gl.createBuffer(),ib=gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER,vb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(verts),gl.STATIC_DRAW);
 gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(indices),gl.STATIC_DRAW);
-meshes.push({id,vb,ib,points,indices,verts,count:indices.length,center:start.map((a,i)=>(a+end[i])/2),isBack:!!opt.back});
+const center=start.map((a,i)=>(a+end[i])/2);
+const radius=Math.max(...points.map(p=>Math.hypot(...p.map((v,i)=>v-center[i]))));
+meshes.push({id,vb,ib,points,indices,verts,count:indices.length,center,radius,isBack:!!opt.back});
 }
 // A deliberately simplified figure; anatomical GLB models are a later milestone.
 tube('head',[0,3.10,0],[0,2.28,0],[[.11,.13],[.29,.28],[.32,.30],[.27,.27],[.09,.13]]);
@@ -231,7 +233,8 @@ window.finishAnatomy=function(){
    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);
    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(data.indices),gl.STATIC_DRAW);
    out.push({id:data.id,vb,ib,verts:data.verts,points:data.points,indices:data.indices,
-    count:data.indices.length,center:data.min.map((v,i)=>(v+data.max[i])/2)});
+    count:data.indices.length,center:data.min.map((v,i)=>(v+data.max[i])/2),
+    radius:Math.hypot(...data.max.map((v,i)=>(v-data.min[i])/2))});
   }
   detailedMeshes=out;useDetailed=preferDetailed;
   activeMeshes=useDetailed?detailedMeshes:proxyMeshes;
@@ -633,8 +636,12 @@ for(const id of order){
  gl.uniform1f(u.centerV,t.drawnV);
  gl.uniform1f(u.ratio,clamp(t.imageRatio,.2,4));
  for(const mesh of activeMeshes){
-  // Tangent-plane projection can cross adjacent body-region mesh boundaries.
-  // Depth and facing-angle checks prevent projecting through the whole body.
+  // Cull distant anatomy parts before each decal pass. Nearby regions
+  // still participate, allowing a tattoo to cross a visible mesh seam.
+  const distanceToPart=Math.hypot(...mesh.center.map((v,i)=>v-t.drawnAnchor[i]));
+  const reach=Math.max(width,width*clamp(t.imageRatio,.2,4))*.72+
+    .52+mesh.radius;
+  if(distanceToPart>reach)continue;
   gl.uniform1f(u.selected,1);
   drawMesh(mesh);
  }
