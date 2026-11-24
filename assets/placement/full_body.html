@@ -7,7 +7,7 @@ canvas{width:100%;height:100%;display:block;touch-action:none}
 </style></head><body><canvas id="view"></canvas><div id="status">Loading body model…</div>
 <script>
 'use strict';
-// Offline, procedural full-body WebGL prototype. No network requests or third-party meshes.
+// Offline WebGL placement studio with licensed anatomical mesh and procedural fallback.
 (function(){
 const canvas=document.getElementById('view'),label=document.getElementById('status');
 const bridge=value=>{if(window.PlacementBridge)window.PlacementBridge.postMessage(value)};
@@ -813,6 +813,7 @@ for(const id of order){
    patchesBuiltThisFrame++;
   }
   if(t.patch&&t.patchSignature===signature){
+    gl.uniform1f(u.selected,1);
     gl.uniform1f(u.geodesic,1);
     gl.enable(gl.POLYGON_OFFSET_FILL);
     gl.polygonOffset(-1,-1);
