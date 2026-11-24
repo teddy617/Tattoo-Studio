@@ -805,7 +805,9 @@ for(const id of order){
  gl.uniform1f(u.centerV,t.drawnV);
  gl.uniform1f(u.ratio,clamp(t.imageRatio,.2,4));
  let usedPatch=false;
- if(t.surfacePatch!==false&&skinGraph&&activeMeshes===detailedMeshes&&!t.dragging){
+ const settling=Math.hypot(...t.anchor.map((v,i)=>v-t.drawnAnchor[i]));
+ if(t.surfacePatch!==false&&skinGraph&&activeMeshes===detailedMeshes&&
+    !t.dragging&&settling<.018){
   const signature=[...t.anchor.map(v=>v.toFixed(3)),width.toFixed(3),
     t.imageRatio.toFixed(3),t.bodyPart].join(':');
   if(t.patchSignature!==signature&&patchesBuiltThisFrame<1&&
